@@ -25,7 +25,7 @@ const NotesScreen = () => {
   const [selectedTab, setSelectedTab] = useState<'todas' | 'nota' | 'tarea'>('todas');
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
-  const theme = Colors.dark;
+  const theme = Colors.light;
   const router = useRouter();
   const { user, loading: userLoading } = useUser();
 
@@ -101,7 +101,7 @@ const NotesScreen = () => {
         backgroundColor: theme.background,
         borderColor: theme.border,
       }]}
-      onPress={() => router.push({ pathname: '/(tabs)/NotaEj', params: { id: item.id } })}
+      onPress={() => router.push({ pathname: '/NotaEj', params: { id: item.id } })}
       onLongPress={() => handleDeleteNote(item.id, item.title)}
     >
       <View style={styles.noteHeader}>
@@ -256,7 +256,7 @@ const NotesScreen = () => {
               {/* Botón flotante */}
               <TouchableOpacity 
                 style={[styles.addButton, { backgroundColor: '#df96c0' }]}
-                onPress={() => router.push('/(tabs)/NuevaNota')}
+                onPress={() => router.push('/NuevaNota')}
               >
                 <Text style={styles.addButtonText}>+</Text>
               </TouchableOpacity>

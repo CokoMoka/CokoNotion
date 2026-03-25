@@ -15,8 +15,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Colors, getFontFamily } from '../../constants/theme';
-import { saveNote } from '../../services/database';
+import { Colors, getFontFamily } from '../constants/theme';
+import { saveNote } from '../services/database';
 
 type NoteType = 'nota' | 'tarea';
 
@@ -28,7 +28,7 @@ const NewNoteScreen = () => {
   const [isImportant, setIsImportant] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const theme = Colors.dark;
+  const theme = Colors.light;
   const router = useRouter();
 
   const font = (type: 'sans' | 'rounded' | 'mono' = 'sans') => ({
@@ -100,7 +100,7 @@ const NewNoteScreen = () => {
   return (
     <SafeAreaProvider>
       <ImageBackground
-        source={require('../../assets/images/c.jpg')}
+        source={require('../assets/images/c.jpg')}
         style={styles.backgroundImage}
         resizeMode="cover"
       >

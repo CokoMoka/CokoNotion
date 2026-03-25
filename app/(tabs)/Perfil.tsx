@@ -36,7 +36,7 @@ const ProfileScreen = () => {
   const [modoEdicion, setModoEdicion] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const theme = Colors.dark;
+  const theme = Colors.light;
   const router = useRouter();
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -433,10 +433,10 @@ const handleDeleteAccount = async () => {
 
                 {/* Botón Cerrar Sesión */}
                 <TouchableOpacity 
-                  style={[styles.logoutButton, { borderColor: theme.bearPrimary }]}
+                  style={[styles.logoutButton, { borderColor: theme.bearLight, backgroundColor: theme.bearPrimary }]}
                   onPress={handleLogout}
                 >
-                  <Text style={[styles.logoutText, { color: theme.bearPrimary }, font('rounded')]}>
+                  <Text style={[styles.logoutText, { color: theme.bearSecondary }, font('rounded')]}>
                     Cerrar Sesión
                   </Text>
                 </TouchableOpacity>
@@ -605,7 +605,7 @@ const styles = StyleSheet.create({
   },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    backgroundColor: 'rgba(0, 0, 0, 0.22)',
   },
   safeArea: {
     flex: 1,

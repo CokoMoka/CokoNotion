@@ -68,12 +68,12 @@ export const Colors: {
     textMuted: '#4a4a4a', // Gris oscuro (antes era #999999)
     
     // Colores gloomy (rosas)
-    bearPrimary: '#96addf', // COLORES PRINCIPALES
-    bearSecondary: '#15437e', // Rosa más oscuro aún
-    bearLight: '#b6f4ff',
-    bearSoft: '#f8d0e8',
-    bearShadow: '#3b51b3',
-    bearAccent: '#4e98d4',
+    bearPrimary: '#e097dd', // COLORES PRINCIPALES
+    bearSecondary: '#7e156e', // Rosa más oscuro aún
+    bearLight: '#e9b6ff',
+    bearSoft: '#f1d0f8',
+    bearShadow: '#84247a',
+    bearAccent: '#dd94e0',
     
     // iOS específicos
     iosBlue: '#007AFF',

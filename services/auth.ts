@@ -7,9 +7,9 @@ import {
   updateEmail as firebaseUpdateEmail,
   reauthenticateWithCredential,
   EmailAuthProvider,
-  deleteUser  // ✅ Agregar esta importación
+  deleteUser  
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore'; // ✅ Agregar deleteDoc
+import { doc, setDoc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
 
 
@@ -29,8 +29,8 @@ export interface UserData {
   sonidos?: boolean;
 }
 
-// ========== FUNCIONES DE AUTENTICACIÓN ==========
-
+//funciones basicas de autenticacion
+//encontrar usuario
 export const getCurrentUser = (): User | null => {
   return auth.currentUser;
 };

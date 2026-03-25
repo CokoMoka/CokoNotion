@@ -15,8 +15,8 @@ import {
 } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Colors, getFontFamily } from '../../constants/theme';
-import { updateCardProgress } from '../../services/flashcardStorage';
+import { Colors, getFontFamily } from '../constants/theme';
+import { updateCardProgress } from '../services/flashcardStorage';
 
 interface Flashcard {
   id: string;
@@ -42,7 +42,7 @@ const StudyScreen = () => {
   const [saving, setSaving] = useState(false);
   const [showCompleteMessage, setShowCompleteMessage] = useState(false);
 
-  const theme = Colors.dark;
+  const theme = Colors.light;
   
   const font = (type: 'sans' | 'rounded' | 'mono' = 'sans') => ({
     fontFamily: getFontFamily(Platform.OS, type),
@@ -199,7 +199,7 @@ const StudyScreen = () => {
     return (
       <SafeAreaProvider>
         <ImageBackground
-          source={require('../../assets/images/bD.jpg')}
+          source={require('../assets/images/bD.jpg')}
           style={styles.backgroundImage}
           resizeMode="cover"
         >
@@ -222,7 +222,7 @@ const StudyScreen = () => {
     return (
       <SafeAreaProvider>
         <ImageBackground
-          source={require('../../assets/images/bD.jpg')}
+          source={require('../assets/images/bD.jpg')}
           style={styles.backgroundImage}
           resizeMode="cover"
         >
@@ -248,7 +248,7 @@ const StudyScreen = () => {
   return (
     <SafeAreaProvider>
       <ImageBackground
-        source={require('../../assets/images/bD.jpg')}
+        source={require('../assets/images/bD.jpg')}
         style={styles.backgroundImage}
         resizeMode="cover"
       >

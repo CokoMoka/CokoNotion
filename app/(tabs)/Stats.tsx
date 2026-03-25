@@ -17,7 +17,7 @@ import { Colors, getFontFamily } from '../../constants/theme';
 
 const StatisticsScreen = () => {
   const [selectedPeriod, setSelectedPeriod] = React.useState('week');
-  const theme = Colors.dark;
+  const theme = Colors.light;
 
   const font = (type: 'sans' | 'rounded' | 'mono' = 'sans') => ({
     fontFamily: getFontFamily(Platform.OS, type),

@@ -16,8 +16,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Colors, getFontFamily } from '../../constants/theme';
-import { deleteNote, getNoteById, Note, updateNote } from '../../services/database';
+import { Colors, getFontFamily } from '../constants/theme';
+import { deleteNote, getNoteById, Note, updateNote } from '../services/database';
 
 const NoteDetailScreen = () => {
   const { id } = useLocalSearchParams();
@@ -31,7 +31,7 @@ const NoteDetailScreen = () => {
   const [editTasks, setEditTasks] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
-  const theme = Colors.dark;
+  const theme = Colors.light;
   const router = useRouter();
 
   const font = (type: 'sans' | 'rounded' | 'mono' = 'sans') => ({
@@ -148,7 +148,7 @@ const NoteDetailScreen = () => {
     return (
       <SafeAreaProvider>
         <ImageBackground
-          source={require('../../assets/images/c.jpg')}
+          source={require('../assets/images/c.jpg')}
           style={styles.backgroundImage}
           resizeMode="cover"
         >
@@ -171,7 +171,7 @@ const NoteDetailScreen = () => {
     return (
       <SafeAreaProvider>
         <ImageBackground
-          source={require('../../assets/images/c.jpg')}
+          source={require('../assets/images/c.jpg')}
           style={styles.backgroundImage}
           resizeMode="cover"
         >
@@ -205,7 +205,7 @@ const NoteDetailScreen = () => {
   return (
     <SafeAreaProvider>
       <ImageBackground
-        source={require('../../assets/images/c.jpg')}
+        source={require('../assets/images/c.jpg')}
         style={styles.backgroundImage}
         resizeMode="cover"
       >

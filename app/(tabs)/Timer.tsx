@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   ImageBackground,
   Platform,
@@ -8,39 +8,159 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
+  Animated,
+  Vibration,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+
+import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, getFontFamily } from '../../constants/theme';
 
+const { width } = Dimensions.get('window');
+
 const TimerScreen = () => {
-  const [selectedTime, setSelectedTime] = React.useState(25);
+  const [selectedTime, setSelectedTime] = useState(25);
+  const [timeLeft, setTimeLeft] = useState(25 * 60); // en segundos
+  const [isActive, setIsActive] = useState(false);
+  const [mode, setMode] = useState<'focus' | 'break'>('focus');
+  const [completedPomodoros, setCompletedPomodoros] = useState(0);
+  const [breakCount, setBreakCount] = useState(0);
+  
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const fadeAnim = useRef(new Animated.Value(1)).current;
 
   const timeOptions = [25, 30, 45, 60];
-  let pomHoy = 2;
-  let tiempoTotal = '50min';
-  let descansos = 3;
-  let frase = '"Ejemplo de frase"';
-  let autorFrase = '— Autor';
+  const breakOptions = [5, 10, 15];
+  
+  // Estadísticas simuladas (conectar con base de datos real)
+  const [pomodorosToday, setPomodorosToday] = useState(2);
+  const [totalTimeToday, setTotalTimeToday] = useState(50); // minutos
+  const [breaksToday, setBreaksToday] = useState(3);
 
-  const minutos = '25';
-  const segundos = '00';
-
-  const theme = Colors.dark;
-
+  const theme = Colors.light;
   const font = (type: 'sans' | 'rounded' | 'mono' = 'sans') => ({
     fontFamily: getFontFamily(Platform.OS, type),
   });
 
+  const minutos = Math.floor(timeLeft / 60);
+  const segundos = timeLeft % 60;
+  const minutosStr = minutos.toString().padStart(2, '0');
+  const segundosStr = segundos.toString().padStart(2, '0');
+  const progress = mode === 'focus' 
+    ? (selectedTime * 60 - timeLeft) / (selectedTime * 60)
+    : (5 * 60 - timeLeft) / (5 * 60);
+
+  // Efecto de animación al cambiar el tiempo
+  const animateTimeChange = () => {
+    Animated.sequence([
+      Animated.spring(scaleAnim, {
+        toValue: 1.05,
+        useNativeDriver: true,
+        tension: 40,
+        friction: 3,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 40,
+        friction: 3,
+      }),
+    ]).start();
+  };
+
+  // Efecto al completar un pomodoro
+  const handleComplete = () => {
+    Vibration.vibrate(500);
+    if (mode === 'focus') {
+      setCompletedPomodoros(prev => prev + 1);
+      setPomodorosToday(prev => prev + 1);
+      setTotalTimeToday(prev => prev + selectedTime);
+      setMode('break');
+      setTimeLeft(5 * 60); // 5 minutos de descanso
+    } else {
+      setBreakCount(prev => prev + 1);
+      setBreaksToday(prev => prev + 1);
+      setMode('focus');
+      setTimeLeft(selectedTime * 60);
+    }
+    animateTimeChange();
+  };
+
+  // Lógica del temporizador
+  useEffect(() => {
+    if (isActive) {
+      intervalRef.current = setInterval(() => {
+        setTimeLeft(prev => {
+          if (prev <= 1) {
+            clearInterval(intervalRef.current!);
+            setIsActive(false);
+            handleComplete();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [isActive]);
+
+  // Sincronizar tiempo cuando cambia selectedTime
+  useEffect(() => {
+    if (!isActive && mode === 'focus') {
+      setTimeLeft(selectedTime * 60);
+      animateTimeChange();
+    }
+  }, [selectedTime]);
+
+  const handleStart = () => {
+    if (timeLeft === 0) {
+      setTimeLeft(selectedTime * 60);
+    }
+    setIsActive(true);
+  };
+
+  const handlePause = () => {
+    setIsActive(false);
+  };
+
+  const handleReset = () => {
+    setIsActive(false);
+    if (mode === 'focus') {
+      setTimeLeft(selectedTime * 60);
+    } else {
+      setTimeLeft(5 * 60);
+    }
+    animateTimeChange();
+  };
+
+  const handleSkip = () => {
+    setIsActive(false);
+    handleComplete();
+  };
+
+  const getModeColor = () => {
+    return mode === 'focus' ? theme.bearAccent : theme.bearSecondary;
+  };
+
+  const getModeLabel = () => {
+    return mode === 'focus' ? 'Enfoque' : 'Descanso';
+  };
+
   return (
     <SafeAreaProvider>
-      {/* IMAGEN DE FONDO PARA TODA LA PANTALLA */}
       <ImageBackground
         source={require('../../assets/images/bD.jpg')}
         style={styles.backgroundImage}
         resizeMode="cover"
       >
-        {/* Overlay oscuro para mejorar legibilidad (opcional) */}
         <View style={styles.overlay}>
           <SafeAreaView style={styles.safeArea}>
             <StatusBar barStyle="light-content" backgroundColor="transparent" />
@@ -50,164 +170,163 @@ const TimerScreen = () => {
               showsVerticalScrollIndicator={false}
             >
               <View style={styles.container}>
-                {/* BANNER CON IMAGEN - AHORA CON OVERLAY MÁS CLARO */}
-               
-
-                {/* Tarjeta principal - con fondo semitransparente */}
-                <View style={[styles.mainCard, { 
-                  backgroundColor: theme.background,
-                  borderColor: theme.border,
-                }]}>
-                  
-                  {/* Temporizador */}
-                  <View style={styles.timerSection}>
-                    <Text style={[styles.sectionLabel, { color: theme.textSecondary }, font('sans')]}>
-                      tiempo restante
+                
+                {/* Header con modo actual */}
+                <View style={styles.header}>
+                  <View style={[styles.modeBadge, { backgroundColor: getModeColor() + '20' }]}>
+                    <Text style={[styles.modeText, { color: getModeColor() }, font('sans')]}>
+                      {getModeLabel()}
                     </Text>
-                    
-                    <View style={styles.timeRectanglesContainer}>
-                      <View style={[styles.timeRectangle, { 
-                        backgroundColor: 'rgba(59, 59, 59, 0.23)',
-                        borderColor: theme.border,
-                      }]}>
-                        <Text style={[styles.timeRectangleValue, { color: theme.textMuted }, font('mono')]}>
-                          {minutos}
-                        </Text>
-                        <Text style={[styles.timeRectangleLabel, { color: theme.text }, font('sans')]}>
-                          minutos
-                        </Text>
-                      </View>
-                      
-                      <View style={styles.timeSeparator}>
-                        <Text style={[styles.timeSeparatorText, { color: theme.bearAccent }, font('mono')]}>
-                          :
-                        </Text>
-                      </View>
-                      
-                      <View style={[styles.timeRectangle, { 
-                        backgroundColor: 'rgba(59, 59, 59, 0.23)',
-                        borderColor: theme.border,
-                      }]}>
-                        <Text style={[styles.timeRectangleValue, { color: theme.textMuted }, font('mono')]}>
-                          {segundos}
-                        </Text>
-                        <Text style={[styles.timeRectangleLabel, { color: theme.text }, font('sans')]}>
-                          segundos
-                        </Text>
-                      </View>
-                    </View>
                   </View>
+                  <Text style={[styles.pomodoroCount, { color: theme.textSecondary }, font('sans')]}>
+                    #{completedPomodoros + 1}
+                  </Text>
+                </View>
 
-                  {/* Selector de tiempo */}
-                  <View style={styles.timeOptionsSection}>
-                    <Text style={[styles.sectionLabel, { color: theme.textSecondary }, font('sans')]}>
-                      duración
-                    </Text>
-                    <View style={styles.timeOptions}>
-                      {timeOptions.map((time) => (
-                        <TouchableOpacity
-                          key={time}
-                          style={[
-                            styles.timeOption,
-                            { 
-                              backgroundColor: 'rgba(59, 59, 59, 0.23)',
-                              borderColor: theme.border,
-                            },
-                            selectedTime === time && { 
-                              backgroundColor: theme.bearPrimary,
-                              borderColor: theme.bearPrimary,
-                            },
-                          ]}
-                          onPress={() => setSelectedTime(time)}
-                        >
-                          <Text
-                            style={[
-                              styles.timeOptionText,
-                              { color: theme.textSecondary },
-                              selectedTime === time && { color: '#ffffff' },
-                              font('rounded'),
-                            ]}
-                          >
-                            {time}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-
-                  {/* Botones de control */}
-                  <View style={styles.controlsSection}>
-                    <TouchableOpacity 
-                      style={[styles.controlButton, { 
-                        backgroundColor: theme.bearPrimary,
-                      }]}
+                {/* Temporizador principal - estilo iOS */}
+                <View style={styles.timerContainer}>
+                  <View style={styles.timerWrapper}>
+                    <LinearGradient
+                      colors={['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.05)']}
+                      style={styles.timerGlow}
+                      start={{ x: 0.5, y: 0 }}
+                      end={{ x: 0.5, y: 1 }}
+                    />
+                    <Animated.View 
+                      style={[
+                        styles.timerDisplay,
+                        { transform: [{ scale: scaleAnim }] }
+                      ]}
                     >
-                      <Text style={[styles.controlButtonText, { color: '#ffffff' }, font('rounded')]}>
-                        Iniciar
-                      </Text>
-                    </TouchableOpacity>
-                    
-                    <View style={styles.secondaryControls}>
-                      <TouchableOpacity 
-                        style={[styles.secondaryButton, { 
-                          backgroundColor: 'rgba(59, 59, 59, 0.23)',
-                          borderColor: theme.border,
-                        }]}
-                      >
-                        <Text style={[styles.secondaryButtonText, { color: theme.textSecondary }, font('sans')]}>
-                          Pausa
+                      <View style={styles.timeDigits}>
+                        <Text style={[styles.timeDigit, { color: theme.text }, font('mono')]}>
+                          {minutosStr}
                         </Text>
-                      </TouchableOpacity>
+                        <Text style={[styles.timeSeparator, { color: theme.text }]}>:</Text>
+                        <Text style={[styles.timeDigit, { color: theme.text }, font('mono')]}>
+                          {segundosStr}
+                        </Text>
+                      </View>
                       
-                      <TouchableOpacity 
-                        style={[styles.secondaryButton, { 
-                            backgroundColor: 'rgba(59, 59, 59, 0.23)',
-                            borderColor: theme.border,
-                        }]}
-                      >
-                        <Text style={[styles.secondaryButtonText, { color: theme.textSecondary }, font('sans')]}>
-                          Reiniciar
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
+                      {/* Barra de progreso circular (opcional) */}
+                      <View style={styles.progressRing}>
+                        <View 
+                          style={[
+                            styles.progressFill,
+                            { 
+                              width: `${progress * 100}%`,
+                              backgroundColor: getModeColor()
+                            }
+                          ]} 
+                        />
+                      </View>
+                    </Animated.View>
                   </View>
                 </View>
 
-                {/* Estadísticas */}
-                <View style={[styles.statsCard, { 
-                  backgroundColor: theme.background,
-                  borderColor: theme.border,
-                }]}>
-                  <Text style={[styles.statsTitle, { color: theme.textSecondary }, font('sans')]}>
-                    estadísticas de hoy
+                {/* Selector de tiempo - estilo iOS */}
+                <View style={styles.timeSelectorContainer}>
+                  <Text style={[styles.selectorLabel, { color: theme.textSecondary }, font('sans')]}>
+                    Duración
                   </Text>
+                  <View style={styles.timeOptions}>
+                    {timeOptions.map((time) => (
+                      <TouchableOpacity
+                        key={time}
+                        style={[
+                          styles.timeOption,
+                          
+                          !isActive && { opacity: 1 }
+                        ]}
+                        onPress={() => !isActive && setSelectedTime(time)}
+                        disabled={isActive}
+                      >
+                        <Text
+                          style={[
+                            styles.timeOptionText,
+                            { color: selectedTime === time ? '#ffffff' : theme.textSecondary },
+                            font('rounded'),
+                          ]}
+                        >
+                          {time}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                {/* Botones de control - estilo iOS */}
+                <View style={styles.controlsContainer}>
+                  {!isActive ? (
+                    <TouchableOpacity 
+                      style={[styles.primaryButton, { backgroundColor: theme.bearPrimary }]}
+                      onPress={handleStart}
+                    >
+                      <Text style={[styles.primaryButtonText, { color: '#ffffff' }, font('rounded')]}>
+                        Iniciar
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity 
+                      style={[styles.primaryButton, { backgroundColor: theme.bearLight }]}
+                      onPress={handlePause}
+                    >
+                      <Text style={[styles.primaryButtonText, { color: '#ffffff' }, font('rounded')]}>
+                        Pausar
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                   
-                  <View style={styles.statsRow}>
-                    <View style={styles.statItem}>
+                  <View style={styles.secondaryButtons}>
+                    <TouchableOpacity 
+                      style={styles.secondaryButton}
+                      onPress={handleReset}
+                    >
+                      <Text style={[styles.secondaryButtonText, { color: theme.textSecondary }, font('sans')]}>
+                        Reiniciar
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={styles.secondaryButton}
+                      onPress={handleSkip}
+                    >
+                      <Text style={[styles.secondaryButtonText, { color: theme.textSecondary }, font('sans')]}>
+                        Saltar
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Estadísticas - estilo iOS cards */}
+                <View style={styles.statsSection}>
+                  <Text style={[styles.sectionTitle, { color: theme.textSecondary }, font('sans')]}>
+                    Hoy
+                  </Text>
+                  <View style={styles.statsGrid}>
+                    <View style={styles.statCard}>
+                      <Text style={[styles.statEmoji, { color: getModeColor() }]}>🌺</Text>
                       <Text style={[styles.statValue, { color: theme.text }, font('rounded')]}>
-                        {pomHoy}
+                        {pomodorosToday}
                       </Text>
                       <Text style={[styles.statLabel, { color: theme.textMuted }, font('sans')]}>
                         Pomodoros
                       </Text>
                     </View>
                     
-                    <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
-                    
-                    <View style={styles.statItem}>
+                    <View style={styles.statCard}>
+                      <Text style={[styles.statEmoji, { color: getModeColor() }]}>⏱️</Text>
                       <Text style={[styles.statValue, { color: theme.text }, font('rounded')]}>
-                        {tiempoTotal}
+                        {totalTimeToday}min
                       </Text>
                       <Text style={[styles.statLabel, { color: theme.textMuted }, font('sans')]}>
                         Tiempo total
                       </Text>
                     </View>
                     
-                    <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
-                    
-                    <View style={styles.statItem}>
+                    <View style={styles.statCard}>
+                      <Text style={[styles.statEmoji, { color: getModeColor() }]}>🧘</Text>
                       <Text style={[styles.statValue, { color: theme.text }, font('rounded')]}>
-                        {descansos}
+                        {breaksToday}
                       </Text>
                       <Text style={[styles.statLabel, { color: theme.textMuted }, font('sans')]}>
                         Descansos
@@ -216,16 +335,13 @@ const TimerScreen = () => {
                   </View>
                 </View>
 
-                {/* Frase */}
-                <View style={[styles.quoteCard, { 
-                    backgroundColor: theme.background,
-                    borderColor: theme.border,
-                }]}>
+                {/* Frase motivacional */}
+                <View style={styles.quoteCard}>
                   <Text style={[styles.quoteText, { color: theme.textSecondary }, font('sans')]}>
-                    {frase}
+                    "La constancia es más importante que la intensidad"
                   </Text>
-                  <Text style={[styles.quoteAuthor, { color: theme.text }, font('rounded')]}>
-                    {autorFrase}
+                  <Text style={[styles.quoteAuthor, { color: getModeColor() }, font('rounded')]}>
+                    — Pomodoro
                   </Text>
                 </View>
               </View>
@@ -245,7 +361,7 @@ const styles = StyleSheet.create({
   },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)', // Overlay oscuro para mejorar legibilidad
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
   },
   safeArea: {
     flex: 1,
@@ -256,212 +372,193 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 20,
-    paddingTop: 10,
-    marginTop: 50,
+    paddingTop: 20,
     paddingBottom: 20,
   },
-  // BANNER CON IMAGEN
-  bannerContainer: {
-    height: 180,
-    width: '100%',
-    marginBottom: 24,
-    borderRadius: 20,
-    overflow: 'hidden',
-    position: 'relative',
-    backgroundColor: '#f8d0e841',
-    borderWidth: 2,
-    borderColor: '#ffffff',
-  },
-  bannerImage: {
-    width: '100%',
-    height: '100%',
-    opacity: 0.8,
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  bannerOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0)',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-  },
-  bannerTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#000000',
-    marginBottom: 2,
-  },
-  bannerSubtitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#2c2c2c',
-  },
-  // Tarjeta principal
-  mainCard: {
-    borderRadius: 24,
-    padding: 15,
-    marginBottom: 20,
-    borderWidth: 1,
-    shadowColor: '#00000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  timerSection: {
-    marginBottom: 28,
-  },
-  sectionLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    marginBottom: 16,
-  },
-  timeRectanglesContainer: {
+  header: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
+    marginBottom: 30,
   },
-  timeRectangle: {
-    flex: 1,
-    borderRadius: 20,
-    paddingVertical: 24,
+  modeBadge: {
     paddingHorizontal: 12,
-    alignItems: 'center',
-    borderWidth: 1,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
-  timeRectangleValue: {
-    fontSize: 64,
-    fontWeight: '400',
-    fontVariant: ['tabular-nums'],
-    marginBottom: 4,
-  },
-  timeRectangleLabel: {
+  modeText: {
     fontSize: 14,
     fontWeight: '500',
   },
-  timeSeparator: {
-    paddingHorizontal: 12,
-    justifyContent: 'center',
+  pomodoroCount: {
+    fontSize: 14,
+  },
+  timerContainer: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  timerWrapper: {
+    alignItems: 'center',
+    position: 'relative',
+  },
+  timerGlow: {
+    position: 'absolute',
+    width: width - 80,
+    height: width - 80,
+    borderRadius: (width - 80) / 2,
+    opacity: 0.3,
+  },
+  timerDisplay: {
     alignItems: 'center',
   },
-  timeSeparatorText: {
-    fontSize: 64,
-    fontWeight: '400',
-    opacity: 0.8,
+  timeDigits: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginBottom: 20,
   },
-  timeOptionsSection: {
-    marginBottom: 28,
+  timeDigit: {
+    fontSize: 72,
+    fontWeight: '300',
+    fontVariant: ['tabular-nums'],
+    letterSpacing: 4,
+  },
+  timeSeparator: {
+    fontSize: 72,
+    fontWeight: '300',
+    marginHorizontal: 8,
+  },
+  progressRing: {
+    width: 200,
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  timeSelectorContainer: {
+    marginBottom: 32,
+  },
+  selectorLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 12,
+    textAlign: 'center',
   },
   timeOptions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  timeOption: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
     justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-  },
-  timeOptionText: {
-    fontSize: 22,
-    fontWeight: '600',
-  },
-  controlsSection: {
     gap: 12,
   },
-  controlButton: {
-    borderRadius: 18,
-    paddingVertical: 18,
+  timeOption: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  timeOptionText: {
+    fontSize: 18,
+    fontWeight: '500',
+  },
+  controlsContainer: {
+    marginBottom: 32,
+  },
+  primaryButton: {
+    paddingVertical: 16,
+    borderRadius: 50,
+    alignItems: 'center',
+    marginBottom: 12,
+    shadowColor: '#FF9F4A',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.3,
     shadowRadius: 8,
-    elevation: 5,
+    elevation: 4,
   },
-  controlButtonText: {
-    fontSize: 20,
-    fontWeight: '700',
+  primaryButtonText: {
+    fontSize: 18,
+    fontWeight: '600',
   },
-  secondaryControls: {
+  secondaryButtons: {
     flexDirection: 'row',
     gap: 12,
   },
   secondaryButton: {
     flex: 1,
-    borderRadius: 16,
-    paddingVertical: 16,
+    paddingVertical: 12,
+    borderRadius: 40,
     alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   secondaryButtonText: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  statsCard: {
-    borderRadius: 22,
-    padding: 22,
-    marginBottom: 20,
-    borderWidth: 1,
-  },
-  statsTitle: {
     fontSize: 15,
+    fontWeight: '500',
+  },
+  statsSection: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 13,
     fontWeight: '600',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 18,
+    letterSpacing: 1,
+    marginBottom: 16,
+    textAlign: 'center',
   },
-  statsRow: {
+  statsGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
   },
-  statItem: {
-    alignItems: 'center',
+  statCard: {
     flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 20,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  statEmoji: {
+    fontSize: 28,
+    marginBottom: 8,
   },
   statValue: {
-    fontSize: 25,
-    fontWeight: '400',
+    fontSize: 22,
+    fontWeight: '600',
     marginBottom: 4,
   },
   statLabel: {
-    fontSize: 14,
+    fontSize: 11,
     fontWeight: '500',
-  },
-  statDivider: {
-    width: 1,
-    height: 40,
   },
   quoteCard: {
-    borderRadius: 22,
-    padding: 22,
-    marginBottom: 20,
-    borderWidth: 1,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 24,
+    padding: 20,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
   },
   quoteText: {
-    fontSize: 18,
-    fontWeight: '500',
+    fontSize: 15,
     fontStyle: 'italic',
     textAlign: 'center',
-    lineHeight: 26,
+    lineHeight: 22,
     marginBottom: 10,
   },
   quoteAuthor: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '500',
   },
 });
 

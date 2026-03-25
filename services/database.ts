@@ -1,6 +1,7 @@
 import { getCurrentUser } from './auth'; 
 import * as SQLite from 'expo-sqlite';
 
+//interfaz a usar para la gente cool que se hace notar
 export interface Note {
   id: string;
   userId: string;     
@@ -11,7 +12,7 @@ export interface Note {
   isImportant: boolean;
   tasks?: string[];
 }
-
+//interfaz para sqlite 
 interface NoteRow {
   id: string;
   userId: string;
@@ -22,16 +23,15 @@ interface NoteRow {
   isImportant: number;
   tasks: string | null;
 }
-
+//obtener bd
 let database: SQLite.SQLiteDatabase | null = null;
-
 const getDatabase = (): SQLite.SQLiteDatabase => {
   if (!database) {
     database = SQLite.openDatabaseSync('notes.db');
   }
   return database;
 };
-
+//convertir notasrow a notas
 const mapRowToNote = (row: NoteRow): Note => {
   return {
     id: row.id,
@@ -68,13 +68,13 @@ export const initDatabase = async (): Promise<void> => {
   }
 };
 
-// ✅ Obtener el usuario actual
+// obtener el usuario actual
 const getCurrentUserId = (): string | null => {
   const user = getCurrentUser();
   return user?.uid || null;
 };
 
-// ✅ Obtener todas las notas del usuario actual
+// obtener todas las notas del usuario actual
 export const getAllNotes = async (): Promise<Note[]> => {
   try {
     const userId = getCurrentUserId();
@@ -92,7 +92,7 @@ export const getAllNotes = async (): Promise<Note[]> => {
   }
 };
 
-// ✅ Obtener notas por tipo del usuario actual
+// obtener notas por TIPO nota o trea
 export const getNotesByType = async (type: 'nota' | 'tarea'): Promise<Note[]> => {
   try {
     const userId = getCurrentUserId();
@@ -110,7 +110,7 @@ export const getNotesByType = async (type: 'nota' | 'tarea'): Promise<Note[]> =>
   }
 };
 
-// ✅ Obtener una nota por ID (verificando que pertenezca al usuario)
+// Obtener n0ta por ID
 export const getNoteById = async (id: string): Promise<Note | null> => {
   try {
     const userId = getCurrentUserId();
@@ -132,7 +132,7 @@ export const getNoteById = async (id: string): Promise<Note | null> => {
   }
 };
 
-// ✅ Guardar una nueva nota (con userId)
+// guardar nota nueva
 export const saveNote = async (note: Omit<Note, 'id' | 'userId'> & { id?: string }) => {
   try {
     const userId = getCurrentUserId();
@@ -156,7 +156,7 @@ export const saveNote = async (note: Omit<Note, 'id' | 'userId'> & { id?: string
   }
 };
 
-// ✅ Actualizar una nota (verificando que pertenezca al usuario)
+// actualizar nota
 export const updateNote = async (id: string, updates: Partial<Note>) => {
   try {
     const userId = getCurrentUserId();
@@ -210,8 +210,7 @@ export const updateNote = async (id: string, updates: Partial<Note>) => {
     return { success: false, error };
   }
 };
-
-// ✅ Eliminar una nota (verificando que pertenezca al usuario)
+//eliminar nota
 export const deleteNote = async (id: string) => {
   try {
     const userId = getCurrentUserId();
@@ -227,4 +226,113 @@ export const deleteNote = async (id: string) => {
     console.error('Error al eliminar nota:', error);
     return { success: false, error };
   }
+};
+
+//==============================MAPAS
+
+// services/database.ts
+
+export interface StudyPoint {
+  id: string;
+  userId: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  createdAt: string;
+  notes?: string;
+}
+
+// Inicializar tabla de puntos de estudio
+export const initStudyPointsTable = async () => {
+  const database = getDatabase();
+  await database.execAsync(`
+    CREATE TABLE IF NOT EXISTS study_points (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      name TEXT NOT NULL,
+      latitude REAL NOT NULL,
+      longitude REAL NOT NULL,
+      createdAt TEXT NOT NULL,
+      notes TEXT
+    );
+  `);
+  console.log('✅ Tabla de puntos de estudio inicializada');
+};
+
+// Obtener puntos de estudio del usuario
+export const getStudyPoints = async (): Promise<StudyPoint[]> => {
+  const userId = getCurrentUserId();
+  if (!userId) return [];
+  
+  const database = getDatabase();
+  const result = await database.getAllAsync(
+    'SELECT * FROM study_points WHERE userId = ? ORDER BY createdAt DESC',
+    [userId]
+  );
+  return result as StudyPoint[];
+};
+
+// Guardar punto de estudio
+export const saveStudyPoint = async (point: Omit<StudyPoint, 'id' | 'userId' | 'createdAt'>): Promise<boolean> => {
+  const userId = getCurrentUserId();
+  if (!userId) return false;
+  
+  const database = getDatabase();
+  const id = Date.now().toString();
+  const createdAt = new Date().toISOString();
+  
+  await database.runAsync(
+    `INSERT INTO study_points (id, userId, name, latitude, longitude, createdAt, notes) 
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [id, userId, point.name, point.latitude, point.longitude, createdAt, point.notes || null]
+  );
+  return true;
+};
+
+// Eliminar punto de estudio
+export const deleteStudyPoint = async (id: string): Promise<boolean> => {
+  const userId = getCurrentUserId();
+  if (!userId) return false;
+  
+  const database = getDatabase();
+  await database.runAsync('DELETE FROM study_points WHERE id = ? AND userId = ?', [id, userId]);
+  return true;
+};
+
+// Actualizar punto de estudio
+export const updateStudyPoint = async (id: string, updates: Partial<StudyPoint>): Promise<boolean> => {
+  const userId = getCurrentUserId();
+  if (!userId) return false;
+  
+  const database = getDatabase();
+  const fields: string[] = [];
+  const values: any[] = [];
+  
+  if (updates.name !== undefined) {
+    fields.push('name = ?');
+    values.push(updates.name);
+  }
+  if (updates.notes !== undefined) {
+    fields.push('notes = ?');
+    values.push(updates.notes);
+  }
+  if (updates.latitude !== undefined) {
+    fields.push('latitude = ?');
+    values.push(updates.latitude);
+  }
+  if (updates.longitude !== undefined) {
+    fields.push('longitude = ?');
+    values.push(updates.longitude);
+  }
+  
+  if (fields.length === 0) return true;
+  
+  values.push(id);
+  values.push(userId);
+  
+  await database.runAsync(
+    `UPDATE study_points SET ${fields.join(', ')} WHERE id = ? AND userId = ?`,
+    values
+  );
+  return true;
 };

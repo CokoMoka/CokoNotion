@@ -27,7 +27,7 @@ import * as Sharing from 'expo-sharing';
 const FlashcardsScreen = () => {
   const [sets, setSets] = useState<FlashcardSet[]>([]);
   const [loading, setLoading] = useState(true);
-  const theme = Colors.dark;
+  const theme = Colors.light;
   const router = useRouter();
 
   const font = (type: 'sans' | 'rounded' | 'mono' = 'sans') => ({
@@ -58,7 +58,7 @@ const FlashcardsScreen = () => {
 
  const handleStudy = (set: FlashcardSet) => {
   router.push({
-    pathname: '/(tabs)/StudyScreen',
+    pathname: '/StudyScreen',
     params: { 
       setId: set.id, 
       setName: set.name,
@@ -69,7 +69,7 @@ const FlashcardsScreen = () => {
 
   const handleEdit = (set: FlashcardSet) => {
     router.push({
-      pathname: '/(tabs)/EditCardScreen',
+      pathname: '/EditCardScreen',
       params: { setId: set.id, setName: set.name, cards: JSON.stringify(set.cards) }
     });
   };
@@ -168,7 +168,7 @@ const FlashcardsScreen = () => {
                   </Text>
                   <TouchableOpacity 
                     style={[styles.addButton, { backgroundColor: theme.bearAccent }]}
-                    onPress={() => router.push('/(tabs)/NewFlashcardSet')}
+                    onPress={() => router.push('/NewFlashcardSet')}
                   >
                     <Text style={styles.addButtonText}>+</Text>
                   </TouchableOpacity>

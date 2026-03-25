@@ -17,8 +17,8 @@ import {
 } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Colors, getFontFamily } from '../../constants/theme';
-import { FlashcardSet, Flashcard, saveFlashcardSet, loadFlashcardSet } from '../../services/flashcardStorage';
+import { Colors, getFontFamily } from '../constants/theme';
+import { FlashcardSet, Flashcard, saveFlashcardSet, loadFlashcardSet } from '../services/flashcardStorage';
 
 const NewFlashcardSet = () => {
   const { setId } = useLocalSearchParams();
@@ -27,13 +27,13 @@ const NewFlashcardSet = () => {
   const [front, setFront] = useState('');
   const [back, setBack] = useState('');
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [loading, setLoading] = useState(!!setId);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   
   const frontInputRef = useRef<TextInput>(null);
   const backInputRef = useRef<TextInput>(null);
 
-  const theme = Colors.dark;
+  const theme = Colors.light;
   const router = useRouter();
 
   const font = (type: 'sans' | 'rounded' | 'mono' = 'sans') => ({
@@ -42,7 +42,7 @@ const NewFlashcardSet = () => {
 
   // Cargar set existente si se está editando
   useEffect(() => {
-    if (setId) {
+    if (setId && setId !== 'undefined') {
       cargarSet();
     } else {
       setLoading(false);
@@ -50,11 +50,17 @@ const NewFlashcardSet = () => {
   }, [setId]);
 
   const cargarSet = async () => {
+    setLoading(true);
     try {
+      console.log('Cargando set con ID:', setId);
       const set = await loadFlashcardSet(setId as string);
       if (set) {
+        console.log('Set cargado:', set.name, 'con', set.cards.length, 'tarjetas');
         setSetName(set.name);
         setCards(set.cards);
+      } else {
+        console.log('Set no encontrado');
+        Alert.alert('Error', 'No se pudo encontrar el set');
       }
     } catch (error) {
       console.error('Error al cargar set:', error);
@@ -78,6 +84,7 @@ const NewFlashcardSet = () => {
     }
 
     if (editingIndex !== null) {
+      // Editar tarjeta existente
       const newCards = [...cards];
       newCards[editingIndex] = {
         ...newCards[editingIndex],
@@ -88,6 +95,7 @@ const NewFlashcardSet = () => {
       Alert.alert('Éxito', 'Tarjeta actualizada');
       limpiarCampos();
     } else {
+      // Agregar nueva tarjeta
       const newCard: Flashcard = {
         id: `card_${Date.now()}_${cards.length}`,
         front: front.trim(),
@@ -144,7 +152,7 @@ const NewFlashcardSet = () => {
     setSaving(true);
 
     const newSet: FlashcardSet = {
-      id: setId ? String(setId) : Date.now().toString(),
+      id: setId && setId !== 'undefined' ? String(setId) : Date.now().toString(),
       name: setName.trim(),
       cards,
       createdAt: new Date().toISOString(),
@@ -170,7 +178,7 @@ const NewFlashcardSet = () => {
     return (
       <SafeAreaProvider>
         <ImageBackground
-          source={require('../../assets/images/bD.jpg')}
+          source={require('../assets/images/bD.jpg')}
           style={styles.backgroundImage}
           resizeMode="cover"
         >
@@ -192,7 +200,7 @@ const NewFlashcardSet = () => {
   return (
     <SafeAreaProvider>
       <ImageBackground
-        source={require('../../assets/images/bD.jpg')}
+        source={require('../assets/images/bD.jpg')}
         style={styles.backgroundImage}
         resizeMode="cover"
       >
@@ -210,22 +218,18 @@ const NewFlashcardSet = () => {
                   <Text style={[styles.backIcon, { color: theme.text }]}>←</Text>
                 </TouchableOpacity>
                 <Text style={[styles.headerTitle, { color: theme.text }, font('rounded')]}>
-                  {setId ? 'Editar Set' : 'Nuevo Set'}
+                  {setId && setId !== 'undefined' ? '✏️ Editar Set' : '📚 Nuevo Set'}
                 </Text>
                 <View style={{ width: 40 }} />
               </View>
 
               {/* Nombre del set */}
-              <View style={styles.nameContainer}>
-                <Text style={[styles.label, { color: theme.textSecondary }, font('sans')]}>
+              <View style={styles.nameSection}>
+                <Text style={[styles.sectionLabel, { color: theme.textSecondary }, font('sans')]}>
                   NOMBRE DEL SET
                 </Text>
                 <TextInput
-                  style={[styles.nameInput, { 
-                    color: theme.text, 
-                    borderColor: theme.border,
-                    backgroundColor: 'rgba(0, 0, 0, 0.6)'
-                  }]}
+                  style={[styles.nameInput, { color: theme.text, borderColor: theme.border, backgroundColor: 'rgba(0,0,0,0.5)' }]}
                   placeholder="Ej: React Native Básico"
                   placeholderTextColor={theme.textMuted}
                   value={setName}
@@ -235,40 +239,37 @@ const NewFlashcardSet = () => {
 
               {/* Lista de tarjetas existentes */}
               {cards.length > 0 && (
-                <View style={styles.cardsSection}>
+                <View style={styles.cardsList}>
                   <View style={styles.sectionHeader}>
                     <Text style={[styles.sectionTitle, { color: theme.textSecondary }, font('sans')]}>
-                      TARJETAS
+                      TARJETAS ({cards.length})
                     </Text>
-                    <Text style={[styles.cardCount, { color: theme.bearPrimary }, font('rounded')]}>
-                      {cards.length}
+                    <Text style={[styles.sectionSubtitle, { color: theme.textMuted }, font('sans')]}>
+                      {cards.filter(c => c.mastered).length} dominadas
                     </Text>
                   </View>
                   
                   {cards.map((card, index) => (
-                    <View key={card.id} style={[styles.cardItem, { 
-                      borderColor: theme.border,
-                      backgroundColor: 'rgba(0, 0, 0, 0.6)'
-                    }]}>
-                      <View style={styles.cardNumber}>
-                        <Text style={[styles.cardNumberText, { color: theme.bearPrimary }]}>
+                    <View key={card.id} style={[styles.cardPreview, { borderColor: theme.border, backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+                      <View style={styles.cardPreviewNumber}>
+                        <Text style={[styles.cardNumber, { color: theme.bearPrimary }]}>
                           {index + 1}
                         </Text>
                       </View>
-                      <View style={styles.cardContent}>
-                        <Text style={[styles.cardFront, { color: theme.text }, font('sans')]}>
+                      <View style={styles.cardPreviewContent}>
+                        <Text style={[styles.cardPreviewFront, { color: theme.text }, font('sans')]} numberOfLines={2}>
                           {card.front}
                         </Text>
-                        <Text style={[styles.cardBack, { color: theme.textSecondary }, font('sans')]}>
-                          {card.back}
+                        <Text style={[styles.cardPreviewBack, { color: theme.textSecondary }, font('sans')]} numberOfLines={1}>
+                          → {card.back}
                         </Text>
                       </View>
-                      <View style={styles.cardActions}>
+                      <View style={styles.cardPreviewActions}>
                         <TouchableOpacity onPress={() => editCard(index)} style={styles.actionBtn}>
                           <Text style={[styles.actionText, { color: theme.bearPrimary }]}>✎</Text>
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => removeCard(index)} style={styles.actionBtn}>
-                          <Text style={[styles.actionText, { color: '#ff6b6b' }]}>🗑️</Text>
+                          <Text style={[styles.actionText, { color: '#ff4444' }]}>🗑️</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -278,24 +279,17 @@ const NewFlashcardSet = () => {
 
               {/* Formulario para agregar/editar tarjeta */}
               <View style={styles.formSection}>
-                <Text style={[styles.formTitle, { color: theme.textSecondary }, font('sans')]}>
-                  {editingIndex !== null ? '✏️ EDITANDO TARJETA' : '➕ NUEVA TARJETA'}
+                <Text style={[styles.sectionTitle, { color: theme.textSecondary }, font('sans')]}>
+                  {editingIndex !== null ? '✏️ EDITANDO TARJETA' : '➕ AGREGAR NUEVA TARJETA'}
                 </Text>
                 
-                <View style={[styles.formCard, { 
-                  borderColor: theme.border,
-                  backgroundColor: 'rgba(0, 0, 0, 0.5)'
-                }]}>
+                <View style={[styles.formCard, { backgroundColor: 'rgba(0,0,0,0.5)', borderColor: theme.border }]}>
                   <Text style={[styles.formLabel, { color: theme.textSecondary }, font('sans')]}>
                     FRENTE (Pregunta)
                   </Text>
                   <TextInput
                     ref={frontInputRef}
-                    style={[styles.formInput, { 
-                      color: theme.text, 
-                      borderColor: theme.border,
-                      backgroundColor: 'rgba(0, 0, 0, 0.4)'
-                    }]}
+                    style={[styles.formInput, { color: theme.text, borderColor: theme.border, backgroundColor: 'rgba(0,0,0,0.3)' }]}
                     placeholder="¿Qué es React Native?"
                     placeholderTextColor={theme.textMuted}
                     value={front}
@@ -308,11 +302,7 @@ const NewFlashcardSet = () => {
                   </Text>
                   <TextInput
                     ref={backInputRef}
-                    style={[styles.formInput, { 
-                      color: theme.text, 
-                      borderColor: theme.border,
-                      backgroundColor: 'rgba(0, 0, 0, 0.4)'
-                    }]}
+                    style={[styles.formInput, { color: theme.text, borderColor: theme.border, backgroundColor: 'rgba(0,0,0,0.3)' }]}
                     placeholder="Framework para construir apps móviles"
                     placeholderTextColor={theme.textMuted}
                     value={back}
@@ -321,16 +311,16 @@ const NewFlashcardSet = () => {
                   />
                   
                   <TouchableOpacity 
-                    style={[styles.addButton, { backgroundColor: theme.bearPrimary }]} 
+                    style={[styles.addCardButton, { backgroundColor: theme.bearPrimary }]} 
                     onPress={addCard}
                   >
-                    <Text style={[styles.addButtonText, { color: '#ffffff' }, font('rounded')]}>
+                    <Text style={[styles.buttonText, { color: '#ffffff' }, font('rounded')]}>
                       {editingIndex !== null ? '✓ Actualizar tarjeta' : '+ Agregar tarjeta'}
                     </Text>
                   </TouchableOpacity>
 
                   {editingIndex !== null && (
-                    <TouchableOpacity onPress={cancelEdit} style={styles.cancelEditBtn}>
+                    <TouchableOpacity onPress={cancelEdit} style={styles.cancelEditButton}>
                       <Text style={[styles.cancelEditText, { color: theme.textSecondary }]}>
                         Cancelar edición
                       </Text>
@@ -344,21 +334,23 @@ const NewFlashcardSet = () => {
                 <Text style={[styles.summaryTitle, { color: theme.textSecondary }, font('sans')]}>
                   RESUMEN
                 </Text>
-                <View style={[styles.summaryCard, { 
-                  borderColor: theme.border,
-                  backgroundColor: 'rgba(0, 0, 0, 0.5)'
-                }]}>
+                <View style={[styles.summaryCard, { backgroundColor: 'rgba(0,0,0,0.5)', borderColor: theme.border }]}>
                   <View style={styles.summaryRow}>
-                    <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>Nombre del set</Text>
+                    <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>Nombre:</Text>
                     <Text style={[styles.summaryValue, { color: theme.text }, font('sans')]}>
                       {setName || "Sin nombre"}
                     </Text>
                   </View>
-                  <View style={styles.summaryDivider} />
                   <View style={styles.summaryRow}>
-                    <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>Total de tarjetas</Text>
-                    <Text style={[styles.summaryValue, { color: theme.bearPrimary }, font('rounded')]}>
+                    <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>Tarjetas:</Text>
+                    <Text style={[styles.summaryValue, { color: theme.text }, font('sans')]}>
                       {cards.length}
+                    </Text>
+                  </View>
+                  <View style={styles.summaryRow}>
+                    <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>Dominadas:</Text>
+                    <Text style={[styles.summaryValue, { color: theme.bearPrimary }, font('rounded')]}>
+                      {cards.filter(c => c.mastered).length}
                     </Text>
                   </View>
                 </View>
@@ -412,7 +404,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 25,
     marginTop: 20,
   },
   backIcon: {
@@ -423,10 +415,10 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '600',
   },
-  nameContainer: {
-    marginBottom: 24,
+  nameSection: {
+    marginBottom: 25,
   },
-  label: {
+  sectionLabel: {
     fontSize: 12,
     fontWeight: '600',
     marginBottom: 8,
@@ -439,8 +431,8 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '500',
   },
-  cardsSection: {
-    marginBottom: 24,
+  cardsList: {
+    marginBottom: 25,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -449,15 +441,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
     letterSpacing: 1,
   },
-  cardCount: {
-    fontSize: 14,
-    fontWeight: '600',
+  sectionSubtitle: {
+    fontSize: 12,
   },
-  cardItem: {
+  cardPreview: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
@@ -465,27 +456,27 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 8,
   },
-  cardNumber: {
+  cardPreviewNumber: {
     width: 32,
     alignItems: 'center',
   },
-  cardNumberText: {
+  cardNumber: {
     fontSize: 14,
     fontWeight: '600',
   },
-  cardContent: {
+  cardPreviewContent: {
     flex: 1,
     marginLeft: 8,
   },
-  cardFront: {
+  cardPreviewFront: {
     fontSize: 14,
     fontWeight: '500',
     marginBottom: 4,
   },
-  cardBack: {
+  cardPreviewBack: {
     fontSize: 12,
   },
-  cardActions: {
+  cardPreviewActions: {
     flexDirection: 'row',
     gap: 8,
   },
@@ -496,18 +487,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   formSection: {
-    marginBottom: 24,
-  },
-  formTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 12,
-    letterSpacing: 1,
+    marginBottom: 25,
   },
   formCard: {
-    borderWidth: 1,
-    borderRadius: 16,
+    marginTop: 8,
     padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
   },
   formLabel: {
     fontSize: 12,
@@ -524,17 +510,17 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     marginBottom: 8,
   },
-  addButton: {
+  addCardButton: {
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 12,
   },
-  addButtonText: {
+  buttonText: {
     fontSize: 16,
     fontWeight: '600',
   },
-  cancelEditBtn: {
+  cancelEditButton: {
     alignItems: 'center',
     marginTop: 12,
   },
@@ -543,7 +529,7 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
   summarySection: {
-    marginBottom: 24,
+    marginBottom: 25,
   },
   summaryTitle: {
     fontSize: 12,
@@ -559,7 +545,7 @@ const styles = StyleSheet.create({
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 8,
+    paddingVertical: 6,
   },
   summaryLabel: {
     fontSize: 14,
@@ -568,16 +554,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
-  summaryDivider: {
-    height: 1,
-    backgroundColor: '#333',
-    marginVertical: 8,
-  },
   saveButton: {
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 10,
     marginBottom: 20,
   },
   saveButtonText: {
