@@ -27,6 +27,10 @@ export interface UserData {
   notificaciones?: boolean;
   recordatorios?: boolean;
   sonidos?: boolean;
+  totalPomodoros?: number;    // Total de pomodoros completados históricos
+  pomodorosHoy?: number;      // Pomodoros completados hoy
+  minutosEstudioHoy?: number; // Minutos estudiados hoy
+  ultimoDiaEstudio?: string;  // Fecha del último estudio (para racha)
 }
 
 //funciones basicas de autenticacion
@@ -96,19 +100,24 @@ export const registerUser = async (
 
     // ✅ Guardar datos adicionales en Firestore
     const userData: UserData = {
-      uid: user.uid,
-      email: user.email!,
-      displayName,
-      createdAt: new Date().toISOString(),
-      lastLogin: new Date().toISOString(),
-      racha: 0,
-      horasEstudio: 0,
-      tareasCompletadas: 0,
-      modoOscuro: true,
-      notificaciones: true,
-      recordatorios: true,
-      sonidos: false,
-    };
+  uid: user.uid,
+  email: user.email!,
+  displayName,
+  createdAt: new Date().toISOString(),
+  lastLogin: new Date().toISOString(),
+  racha: 0,
+  horasEstudio: 0,
+  tareasCompletadas: 0,
+  modoOscuro: true,
+  notificaciones: true,
+  recordatorios: true,
+  sonidos: false,
+  // ✅ AGREGAR VALORES INICIALES:
+  totalPomodoros: 0,
+  pomodorosHoy: 0,
+  minutosEstudioHoy: 0,
+  ultimoDiaEstudio: undefined,
+};
 
     await setDoc(doc(db, 'users', user.uid), userData);
 

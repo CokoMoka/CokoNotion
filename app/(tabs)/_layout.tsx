@@ -80,7 +80,25 @@ export default function TabsLayout() {
           ),
         }}
       />
-      
+      <Tabs.Screen
+        name="Pruebas"
+        options={{
+          title: '', // Título vacío
+          tabBarIcon: ({ color, size, focused }) => (
+            <AnimatedIcon name="home" color={color} size={size} focused={focused} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="am"
+        options={{
+          title: '', // Título vacío
+          tabBarIcon: ({ color, size, focused }) => (
+            <AnimatedIcon name="home" color={color} size={size} focused={focused} />
+          ),
+        }}
+      />
       
       
       {/* Flashcards */}
@@ -111,7 +129,29 @@ export default function TabsLayout() {
         options={{
           title: '',
           tabBarIcon: ({ color, size, focused }) => (
-            <AnimatedIcon name="document-text" color={color} size={size} focused={focused} />
+            <AnimatedIcon name="pencil" color={color} size={size} focused={focused} />
+          ),
+        }}
+      />
+
+      {/* Notas */}
+      <Tabs.Screen
+        name="ProfileN"
+        options={{
+          title: '',
+          tabBarIcon: ({ color, size, focused }) => (
+            <AnimatedIcon name="person" color={color} size={size} focused={focused} />
+          ),
+        }}
+      />
+
+      {/* Notas */}
+      <Tabs.Screen
+        name="NotasN"
+        options={{
+          title: '',
+          tabBarIcon: ({ color, size, focused }) => (
+            <AnimatedIcon name="pencil" color={color} size={size} focused={focused} />
           ),
         }}
       />
@@ -126,6 +166,49 @@ export default function TabsLayout() {
           ),
         }}
       />
+
+      {/* Estadísticas */}
+      <Tabs.Screen
+        name="EstadisticasN"
+        options={{
+          title: '',
+          tabBarIcon: ({ color, size, focused }) => (
+            <AnimatedIcon name="stats-chart" color={color} size={size} focused={focused} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="FeedFlashCards"
+        options={{
+          title: '',
+          tabBarIcon: ({ color, size, focused }) => (
+            <AnimatedIcon name="document-text" color={color} size={size} focused={focused} />
+          ),
+        }}
+      />
+
+       <Tabs.Screen
+        name="EditSet"
+        options={{
+          title: '',
+          tabBarIcon: ({ color, size, focused }) => (
+            <AnimatedIcon name="pencil" color={color} size={size} focused={focused} />
+          ),
+        }}
+      />
+
+      
+
+       <Tabs.Screen
+        name="PomSetup"
+        options={{
+          title: '',
+          tabBarIcon: ({ color, size, focused }) => (
+            <AnimatedIcon name="timer" color={color} size={size} focused={focused} />
+          ),
+        }}
+      />
       
       
       
@@ -135,7 +218,7 @@ export default function TabsLayout() {
         options={{
           title: '',
           tabBarIcon: ({ color, size, focused }) => (
-            <AnimatedIcon name="Mapa" color={color} size={size} focused={focused} />
+            <AnimatedIcon name="Map" color={color} size={size} focused={focused} />
           ),
         }}
       />

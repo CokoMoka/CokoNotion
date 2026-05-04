@@ -17,9 +17,9 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Colors, getFontFamily } from '../../constants/theme';
-import { getAllNotes, getNotesByType, initDatabase, Note } from '../../services/database';
-import { useUser } from '../../hooks/useUser';
+import { Colors, getFontFamily } from '../constants/theme';
+import { getAllNotes, getNotesByType, initDatabase, Note } from '../services/database';
+import { useUser } from '../hooks/useUser';
 
 const NotesScreen = () => {
   const [selectedTab, setSelectedTab] = useState<'todas' | 'nota' | 'tarea'>('todas');
@@ -86,7 +86,7 @@ const NotesScreen = () => {
           text: 'Eliminar',
           style: 'destructive',
           onPress: async () => {
-            const { deleteNote } = await import('../../services/database');
+            const { deleteNote } = await import('../services/database');
             await deleteNote(id);
             cargarNotas();
           },
@@ -154,7 +154,7 @@ const NotesScreen = () => {
   return (
     <SafeAreaProvider>
       <ImageBackground
-        source={require('../../assets/images/bD.jpg')}
+        source={require('../assets/images/bD.jpg')}
         style={styles.backgroundImage}
         resizeMode="cover"
       >
@@ -167,7 +167,7 @@ const NotesScreen = () => {
               <View style={styles.bannerWrapper}>
                 <View style={styles.bannerContainer}>
                   <Image
-                    source={require('../../assets/images/aD.jpg')}
+                    source={require('../assets/images/aD.jpg')}
                     style={styles.bannerImage}
                     resizeMode="cover"
                   />

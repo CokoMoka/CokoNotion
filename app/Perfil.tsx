@@ -18,11 +18,11 @@ import {
     ActivityIndicator,
 } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { Colors, getFontFamily } from '../../constants/theme';
-import { updateUserProfile, logoutUser, deleteCurrentAccount   } from '../../services/auth';
+import { Colors, getFontFamily } from '../constants/theme';
+import { updateUserProfile, logoutUser, deleteCurrentAccount   } from '../services/auth';
 import { useRouter } from 'expo-router';
-import { useUser } from '../../hooks/useUser';
-import { reauthenticateUser } from '../../services/auth';
+import { useUser } from '../hooks/useUser';
+import { reauthenticateUser } from '../services/auth';
 
 const ProfileScreen = () => {
   const { user, loading: userLoading, refreshUser } = useUser();
@@ -193,7 +193,7 @@ const handleDeleteAccount = async () => {
     return (
       <SafeAreaProvider>
         <ImageBackground
-          source={require('../../assets/images/bD.jpg')}
+          source={require('../assets/images/bD.jpg')}
           style={styles.backgroundImage}
           resizeMode="cover"
         >
@@ -215,7 +215,7 @@ const handleDeleteAccount = async () => {
   return (
     <SafeAreaProvider>
       <ImageBackground
-        source={require('../../assets/images/bD.jpg')}
+        source={require('../assets/images/bD.jpg')}
         style={styles.backgroundImage}
         resizeMode="cover"
       >
@@ -232,7 +232,7 @@ const handleDeleteAccount = async () => {
                 <View style={styles.bannerWrapper}>
                   <View style={styles.bannerContainer}>
                     <Image
-                      source={require('../../assets/images/aD.jpg')}
+                      source={require('../assets/images/aD.jpg')}
                       style={styles.bannerImage}
                       resizeMode="cover"
                     />

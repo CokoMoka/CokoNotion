@@ -31,7 +31,7 @@ const NoteDetailScreen = () => {
   const [editTasks, setEditTasks] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
-  const theme = Colors.light;
+  const theme = Colors.dark;
   const router = useRouter();
 
   const font = (type: 'sans' | 'rounded' | 'mono' = 'sans') => ({
@@ -227,11 +227,11 @@ const NoteDetailScreen = () => {
                   <View style={styles.headerActions}>
                     {!editing && (
                       <TouchableOpacity onPress={() => setEditing(true)} style={styles.headerButton}>
-                        <Text style={[styles.headerButtonText, { color: theme.bearPrimary }]}>✎</Text>
+                        <Text style={[styles.headerButtonText, { color: theme.bearPrimary }]}>𓂃✍︎</Text>
                       </TouchableOpacity>
                     )}
                     <TouchableOpacity onPress={handleDelete} style={styles.headerButton}>
-                      <Text style={[styles.headerButtonText, { color: theme.textSecondary }]}>🗑️</Text>
+                      <Text style={[styles.headerButtonText, {marginTop: 6},{ color: theme.textSecondary }]}>✗</Text>
                     </TouchableOpacity>
                   </View>
                 </View>

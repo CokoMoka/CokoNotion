@@ -8,23 +8,23 @@
     "scheme": "cokonotion",
     "userInterfaceStyle": "automatic",
     "splash": {
-          "image": "./assets/images/wbg_Icono_CokoNa.png",
-          "imageWidth": 300,
-          "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
-          "dark": {
-            "backgroundColor": "#000000"
-          }
+      "image": "./assets/images/wbg_Icono_CokoNa.png",
+      "imageWidth": 300,
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff",
+      "dark": {
+        "backgroundColor": "#000000"
+      }
     },
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true
     },
-      "config": {
-        "googleMaps": {
-          "apiKey":"AIzaSyBt0aDPeJic1eh8Gd2MVXzprLEzLYtaK98"
-        }
-      },
+    "config": {
+      "googleMaps": {
+        "apiKey": "AIzaSyBt0aDPeJic1eh8Gd2MVXzprLEzLYtaK98"
+      }
+    },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -53,7 +53,8 @@
           }
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

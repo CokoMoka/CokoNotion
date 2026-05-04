@@ -1,6 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -12,50 +11,119 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
+  RefreshControl,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import { Colors, getFontFamily } from '../../constants/theme';
 import { useUser } from '../../hooks/useUser';
+import { AppImages } from '../../constants/images';
 
-// ✅ Componente principal
-const DashboardScreen = () => {
-  const { user, loading } = useUser();
+/**
+ * Configuración de texto estático del nuevo diseño
+ */
+const SCREEN_TEXT = {
+  navLetters: ['ᝰ.ᐟ', '𖡎', '⏱', 'ılı', '𐀪'] as const,
+  tasksSectionTitle: 'Próximas Tareas',
+} as const;
+
+// Mapeo de íconos a rutas de navegación
+const NAV_ACTIONS = [
+  { name: 'Notas', icon: 'ᝰ.ᐟ', route: '/Notas' },
+  { name: 'Flashcards', icon: '𖡎', route: '/FeedFlashCards' },
+  { name: 'Temporizador', icon: '⏱', route: '/PomSetup' },
+  { name: 'Estadísticas', icon: 'ılı', route: '/EstadisticasN' },
+  { name: 'Configuración', icon: '𐀪', route: '/Perfil' },
+] as const;
+
+export default function DashboardScreen() {
+  const { width } = useWindowDimensions();
+  const scale = width / 390;
+  const s = (value: number) => value * scale;
+
+  const { user, loading, refreshUser } = useUser();
   const [userName, setUserName] = useState("Estudiante");
+  const [refreshing, setRefreshing] = useState(false);
+  
+  // Estado para frases motivacionales
+  const [cita, setCita] = useState("La constancia es más importante que la intensidad");
+  const [autorCita, setAutorCita] = useState("Pomodoro");
+  
+  // Estado para estadísticas dinámicas
+  const [estadisticas, setEstadisticas] = useState([
+    { label: 'Racha actual', value: '0 días', icon: '🌺' },
+    { label: 'Horas estudiadas', value: '0h', icon: '📓' },
+    { label: 'Tareas completadas', value: '0', icon: '✅' },
+    { label: 'Recompensas', value: '0', icon: '🏆' },
+  ]);
 
   const theme = Colors.light;
-  let cita = "Ejemplo de cita";
-  let autorCita = "Autor de la cita";
+  const greeting = `¡Hola, ${userName}!`;
 
   const font = (type: 'sans' | 'rounded' | 'mono' = 'sans') => ({
     fontFamily: getFontFamily(Platform.OS, type),
   });
 
-  const stats = [
-    { label: 'Racha actual', value: '7 días', icon: '🔥' },
-    { label: 'Horas estudiadas', value: '28.5h', icon: '⏰' },
-    { label: 'Tareas completadas', value: '15', icon: '✅' },
-    { label: 'Recompensas', value: '3', icon: '🏆' },
-  ];
+  // Función para actualizar datos desde Firestore
+  const actualizarDatosDesdeFirestore = useCallback(async () => {
+    if (!user) return;
+    
+    const horasFormateadas = (user?.horasEstudio || 0).toFixed(1);
+    
+    // Actualizar estadísticas con datos reales
+    setEstadisticas([
+      { label: 'Racha actual', value: `${user.racha || 0} días`, icon: '🌺' },
+      { label: 'Horas estudiadas', value: `${horasFormateadas}h`, icon: '📓' },
+      { label: 'Tareas completadas', value: `${user.tareasCompletadas || 0}`, icon: '✅' },
+      { label: 'Recompensas', value: `${user.recompensas || 0}`, icon: '🏆' },
+    ]);
+    
+    // Actualizar frase motivacional aleatoria
+    const frases = [
+      { texto: "Work Hard!", autor: "CokoNotion" },
+    ];
+    const fraseAleatoria = frases[Math.floor(Math.random() * frases.length)];
+    setCita(fraseAleatoria.texto);
+    setAutorCita(fraseAleatoria.autor);
+  }, [user]);
 
-  const quickActions = [
-    { name: 'Notas', icon: 'ᝰ.ᐟ', color: theme.border },
-    { name: 'Flashcards', icon: '𖡎', color: theme.border },
-    { name: 'Temporizador', icon: '⏱', color: theme.border },
-    { name: 'Estadísticas', icon: 'ılı', color: theme.border },
-  ];
+  // Función de refresco al hacer pull-down
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refreshUser();
+      if (user?.displayName) {
+        setUserName(user.displayName);
+      }
+      await actualizarDatosDesdeFirestore();
+      console.log('✅ Pantalla refrescada correctamente');
+    } catch (error) {
+      console.error('❌ Error al refrescar:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshUser, user, actualizarDatosDesdeFirestore]);
 
-  // ✅ Cargar nombre del usuario autenticado
+  // Cargar datos iniciales
   useEffect(() => {
     if (user?.displayName) {
       setUserName(user.displayName);
     }
-  }, [user]);
+    if (user) {
+      actualizarDatosDesdeFirestore();
+    }
+  }, [user, actualizarDatosDesdeFirestore]);
+
+  const handleNavigation = (route: string) => {
+    router.push(route);
+  };
 
   if (loading) {
     return (
       <SafeAreaProvider>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#df96c0" />
         </View>
       </SafeAreaProvider>
@@ -65,7 +133,7 @@ const DashboardScreen = () => {
   return (
     <SafeAreaProvider>
       <ImageBackground
-        source={require('../../assets/images/bD.jpg')}
+        source={AppImages.backgroundImg || require('../../assets/images/bD.jpg')}
         style={styles.backgroundImage}
         resizeMode="cover"
       >
@@ -73,153 +141,171 @@ const DashboardScreen = () => {
           <SafeAreaView style={styles.safeArea}>
             <StatusBar barStyle="light-content" backgroundColor="transparent" />
             
-            <ScrollView 
-              contentContainerStyle={styles.scrollContainer}
+            <ScrollView
+              contentContainerStyle={[styles.scrollContent, { paddingBottom: s(28) }]}
               showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  colors={['#df96c0', '#FF9F4A']}
+                  tintColor="#df96c0"
+                  title="Actualizando..."
+                  titleColor="#ffffff"
+                  progressBackgroundColor="rgba(0,0,0,0.3)"
+                />
+              }
             >
-              <View style={styles.container}>
-                {/* BANNER CON DEGRADADO */}
-                <View style={styles.bannerWrapper}>
-                  <View style={styles.bannerContainer}>
-                    <Image
-                      source={require('../../assets/images/aD.jpg')}
-                      style={styles.bannerImage}
-                      resizeMode="cover"
-                    />
-                    <LinearGradient
-                      colors={['transparent', theme.background]}
-                      style={styles.bannerGradientExtra}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 0, y: 1 }}
-                    />
-                    <View style={styles.bannerOverlay}>
-                      <Text style={[styles.bannerTitle, font('rounded')]}>
-                        Inicio
-                      </Text>
-                      <Text style={[styles.bannerSubtitle, font('sans')]}>
-                        Bienvenido a tu espacio 
+              {/* BANNER NUEVO - Solo la imagen, sin texto */}
+              <View style={styles.bannerWrapper}>
+                <ImageBackground
+                  source={AppImages.banner}
+                  resizeMode="cover"
+                  style={[styles.banner, { height: s(120) }]}
+                />
+              </View>
+
+              {/* HEADER con avatar y burbuja - MODIFICADO: burbuja ajustada al texto */}
+              <View style={styles.headerWrap}>
+                <View style={[styles.headerOverlap, { marginTop: s(-30), paddingHorizontal: s(16) }]}>
+                  <View style={[styles.avatar, { width: s(92), height: s(92), borderRadius: s(46), borderWidth: s(3) }]}>
+                    <Image source={AppImages.icon} style={styles.avatarImage} resizeMode="cover" />
+                  </View>
+
+                  {/* Burbuja con ancho dinámico - AHORA SE AJUSTA AL TEXTO */}
+                  <View style={styles.bubbleContainer}>
+                    {/* Colas de la burbuja */}
+                    <View style={[styles.bubbleTail1, { width: s(24), height: s(24), borderRadius: s(12), left: s(-6), top: s(-6) }]} />
+                    <View style={[styles.bubbleTail2, { width: s(10), height: s(10), borderRadius: s(6), left: s(-13), top: s(-11) }]} />
+                    
+                    {/* Cuerpo de la burbuja - ancho automático */}
+                    <View style={styles.bubble}>
+                      <Text
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.65}
+                        style={[styles.bubbleText, { fontSize: s(18) }]}>
+                        {cita}
                       </Text>
                     </View>
                   </View>
                 </View>
+              </View>
 
-                {/* Header con imagen de osito */}
-                <View style={styles.header}>
-                  <View style={styles.headerLeft}>
-                    <View style={styles.bearIconContainer}>
-                      <Text style={styles.bearIcon}>🐕</Text>
-                    </View>
-                    <View>
-                      <Text style={[styles.greeting, font('rounded')]}>
-                        ¡Hola, {userName}!
-                      </Text>
-                      <Text style={[styles.date, font('sans')]}>
-                        {new Date().toLocaleDateString('es-ES', { 
-                          weekday: 'long', 
-                          year: 'numeric', 
-                          month: 'long', 
-                          day: 'numeric' 
-                        })}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={styles.headerIcons}>
-                    <TouchableOpacity style={styles.iconButton}>
-                      <Text style={styles.icon}>⢰</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
+              {/* BOTONES DE NAVEGACIÓN */}
+              <View style={[styles.navRow, { paddingHorizontal: s(16), marginTop: s(16), gap: s(10) }]}>
+                {NAV_ACTIONS.map((action, index) => (
+                  <TouchableOpacity
+                    key={`${action.icon}-${index}`}
+                    activeOpacity={0.65}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Botón ${action.name}`}
+                    onPress={() => handleNavigation(action.route)}
+                    style={[
+                      styles.navButton,
+                      {
+                        width: s(62),
+                        height: s(62),
+                        borderRadius: s(16),
+                      },
+                    ]}>
+                    <Text style={[styles.navLetter, { fontSize: s(28) }]}>{action.icon}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
-                {/* Próximas Tareas */}
-                <Text style={[styles.sectionTitle, { color: '#ffffff' }, font('rounded')]}>
-                  Próximas Tareas
-                </Text>
-                <View style={[styles.tasksCard, { 
-                  backgroundColor: theme.background,
-                  borderColor: theme.border,
-                }]}>
-                  <View style={styles.taskItem}>
-                    <View style={[styles.taskCheckbox, { borderColor: theme.bearPrimary }]} />
-                    <View style={styles.taskContent}>
-                      <Text style={[styles.taskTitle, { color: theme.text }, font('sans')]}>
-                        Estudiar React Native
-                      </Text>
-                      <Text style={[styles.taskTime, { color: theme.textMuted }, font('sans')]}>
-                        Hoy, 6:00 PM
-                      </Text>
-                    </View>
-                    <Text style={[styles.taskSubject, { color: theme.text }, font('sans')]}>
-                      Programación
-                    </Text>
-                  </View>
+              {/* SALUDO */}
+              <Text style={[styles.greeting, { paddingHorizontal: s(16), marginTop: s(18), fontSize: s(28) }]}>
+                {greeting}
+              </Text>
 
-                  <View style={[styles.taskDivider, { backgroundColor: theme.border }]} />
+              {/* FECHA ACTUAL */}
+              <Text style={[styles.dateText, { paddingHorizontal: s(16), marginTop: s(4), fontSize: s(14) }]}>
+                {new Date().toLocaleDateString('es-ES', { 
+                  weekday: 'long', 
+                  year: 'numeric', 
+                  month: 'long', 
+                  day: 'numeric' 
+                })}
+              </Text>
 
-                  <View style={styles.taskItem}>
-                    <View style={[styles.taskCheckbox, { borderColor: theme.bearPrimary }]} />
-                    <View style={styles.taskContent}>
-                      <Text style={[styles.taskTitle, { color: theme.text }, font('sans')]}>
-                        Hacer Flashcards
-                      </Text>
-                      <Text style={[styles.taskTime, { color: theme.textMuted }, font('sans')]}>
-                        Mañana, 10:00 AM
-                      </Text>
-                    </View>
-                    <Text style={[styles.taskSubject, { color: theme.text }, font('sans')]}>
-                      Estudio
-                    </Text>
-                  </View>
-                </View>
+              {/* PRÓXIMAS TAREAS - Título */}
+              <Text style={[styles.sectionTitle, { paddingHorizontal: s(16), marginTop: s(18), fontSize: s(18) }]}>
+                {SCREEN_TEXT.tasksSectionTitle}
+              </Text>
 
-                {/* Quick Actions */}
-                <Text style={[styles.sectionTitle, { color: '#ffffff' }, font('rounded')]}>
-                  Acciones Rápidas
-                </Text>
-                <View style={styles.quickActionsGrid}>
-                  {quickActions.map((action, index) => (
-                    <TouchableOpacity 
-                      key={index} 
-                      style={[styles.actionCard, { 
-                          backgroundColor: theme.background,
-                          borderColor: theme.border,
-                      }]}
-                    >
-                      <View style={[styles.actionIconContainer, { backgroundColor: action.color }]}>
-                        <Text style={styles.actionIcon}>{action.icon}</Text>
+              {/* TAREAS */}
+              <View style={[styles.tasksList, { paddingHorizontal: s(16), marginTop: s(12), gap: s(12) }]}>
+                {user?.tareas?.length > 0 ? (
+                  user.tareas.slice(0, 3).map((tarea: any, index: number) => (
+                    <TouchableOpacity
+                      key={tarea.id || index}
+                      activeOpacity={0.7}
+                      onPress={() => console.log(`Tarea: ${tarea.title}`)}
+                      style={[
+                        styles.taskRow,
+                        {
+                          borderRadius: s(18),
+                          paddingVertical: s(14),
+                          paddingHorizontal: s(14),
+                        },
+                      ]}>
+                      <View style={[styles.taskCheckbox, { width: s(24), height: s(24), borderRadius: s(12), borderWidth: 2, borderColor: '#df96c0' }]} />
+                      <View style={{ marginLeft: s(12), flex: 1 }}>
+                        <Text style={[styles.taskTitle, { fontSize: s(16) }]}>{tarea.title || 'Tarea pendiente'}</Text>
+                        <Text style={[styles.taskTime, { fontSize: s(13), marginTop: s(4) }]}>
+                          {tarea.fecha || new Date().toLocaleDateString()}
+                        </Text>
                       </View>
-                      <Text style={[styles.actionName, { color: theme.text }, font('sans')]}>
-                        {action.name}
-                      </Text>
                     </TouchableOpacity>
-                  ))}
-                </View>
+                  ))
+                ) : (
+                  [
+                    { title: 'Estudiar React Native', time: 'Hoy, 6:00 PM' },
+                    { title: 'Hacer Flashcards', time: 'Mañana, 10:00 AM' },
+                    { title: 'Completar proyecto', time: 'Vie, 3:00 PM' },
+                  ].map((task, index) => (
+                    <View
+                      key={index}
+                      style={[
+                        styles.taskRow,
+                        {
+                          borderRadius: s(18),
+                          paddingVertical: s(14),
+                          paddingHorizontal: s(14),
+                        },
+                      ]}>
+                      <View style={[styles.taskCheckbox, { width: s(24), height: s(24), borderRadius: s(12), borderWidth: 2, borderColor: '#df96c0' }]} />
+                      <View style={{ marginLeft: s(12), flex: 1 }}>
+                        <Text style={[styles.taskTitle, { fontSize: s(16) }]}>{task.title}</Text>
+                        <Text style={[styles.taskTime, { fontSize: s(13), marginTop: s(4) }]}>{task.time}</Text>
+                      </View>
+                    </View>
+                  ))
+                )}
+              </View>
 
-                {/* Frase motivacional */}
-                <View style={[styles.quoteCard, { 
-                  backgroundColor: theme.background,
-                  borderColor: theme.border,
-                }]}>
-                  <Text style={styles.quoteIcon}>🐶</Text>
-                  <Text style={[styles.quoteText, { color: theme.textSecondary }, font('sans')]}>
-                    {cita}
-                  </Text>
-                  <Text style={[styles.quoteAuthor, { color: theme.text }, font('rounded')]}>
-                    — {autorCita}
-                  </Text>
-                </View>
-
-                {/* Stats Cards */}
-                <View style={styles.statsContainer}>
-                  {stats.map((stat, index) => (
-                    <View key={index} style={[styles.statCard, { 
-                      backgroundColor: theme.background,
-                      borderColor: theme.border,
-                    }]}>
-                      <Text style={styles.statIcon}>{stat.icon}</Text>
-                      <Text style={[styles.statValue, { color: theme.text }, font('rounded')]}>
+              {/* ESTADÍSTICAS */}
+              <View
+                style={[
+                  styles.statsCard,
+                  {
+                    marginHorizontal: s(16),
+                    marginTop: s(18),
+                    borderRadius: s(22),
+                    paddingVertical: s(16),
+                    paddingHorizontal: s(12),
+                    marginBottom: s(20),
+                  },
+                ]}>
+                <View style={styles.statsRow}>
+                  {estadisticas.map((stat, index) => (
+                    <View key={index} style={styles.statCol}>
+                      <Text style={[styles.statIcon, { fontSize: s(28), marginBottom: s(8) }]}>{stat.icon}</Text>
+                      <Text style={[styles.statValue, { fontSize: s(20), marginTop: s(4), color: '#ffffff', fontWeight: '800' }]}>
                         {stat.value}
                       </Text>
-                      <Text style={[styles.statLabel, { color: theme.textMuted }, font('sans')]}>
+                      <Text style={[styles.statLabel, { fontSize: s(11), marginTop: s(6), color: '#b5b5b5' }]}>
                         {stat.label}
                       </Text>
                     </View>
@@ -232,9 +318,15 @@ const DashboardScreen = () => {
       </ImageBackground>
     </SafeAreaProvider>
   );
-};
+}
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#1a1a2e',
+  },
   backgroundImage: {
     flex: 1,
     width: '100%',
@@ -247,257 +339,137 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
-  scrollContainer: {
+  scrollContent: {
     flexGrow: 1,
   },
-  container: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 20,
-  },
-  // BANNER
   bannerWrapper: {
-    marginHorizontal: -20,
-    marginBottom: -30,
-    marginTop: -10,
-  },
-  bannerContainer: {
-    height: 200,
     width: '100%',
-    overflow: 'hidden',
-    position: 'relative',
-    backgroundColor: '#ff009900',
   },
-  bannerImage: {
+  banner: {
+    width: '100%',
+  },
+  headerWrap: {
+    width: '100%',
+  },
+  headerOverlap: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+  },
+  avatar: {
+    overflow: 'hidden',
+    borderColor: '#ffffff',
+    backgroundColor: '#111',
+  },
+  avatarImage: {
     width: '100%',
     height: '100%',
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
   },
-  bannerGradientExtra: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 2,
+  // NUEVO: contenedor de la burbuja con ancho ajustado al contenido
+  bubbleContainer: {
+    marginLeft: 14,
+    flexShrink: 1,        // Permite que se encoja si es necesario
+    maxWidth: '80%',      // Límite máximo para no ocupar toda la pantalla
   },
-  bannerOverlay: {
+  bubbleTail1: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 20,
-    paddingVertical: 4,
-    zIndex: 3,
+    backgroundColor: '#f3f3f3',
+    transform: [{ rotate: '45deg' }],
+    zIndex: 1,
   },
-  bannerTitle: {
-    fontSize: 32,
+  bubbleTail2: {
+    position: 'absolute',
+    backgroundColor: '#f3f3f3',
+    transform: [{ rotate: '45deg' }],
+    zIndex: 1,
+  },
+  bubble: {
+    backgroundColor: '#f3f3f3',
+    borderRadius: 22,
+    paddingVertical: 14,
+    paddingHorizontal: 18,  // Padding horizontal reducido para menos espacio de sobra
+    alignSelf: 'flex-start', // IMPORTANTE: hace que la burbuja se ajuste al texto
+  },
+  bubbleText: {
+    color: '#000000',
     fontWeight: '700',
-    color: '#ffffff',
-    textShadowColor: 'rgba(0,0,0,0.4)',
-    textShadowOffset: { width: 2, height: 2 },
-    textShadowRadius: 4,
-    marginBottom: 4,
   },
-  bannerSubtitle: {
-    fontSize: 16,
-    marginTop: -7,
-    marginBottom: 10,
-    fontWeight: '500',
-    color: '#ffffff',
-    textShadowColor: 'rgba(0,0,0,0.4)',
-    textShadowOffset: { width: 2, height: 2 },
-    textShadowRadius: 4,
-  },
-  // Header
-  header: {
+  navRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 45,
-    marginBottom: 20,
   },
-  headerLeft: {
-    flexDirection: 'row',
+  navButton: {
+    backgroundColor: '#2a2f34',
     alignItems: 'center',
-  },
-  bearIconContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-    borderWidth: 2,
-    borderColor: '#ffffff4b',
+    borderWidth: 1,
+    borderColor: '#343a40',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 8,
   },
-  bearIcon: {
-    fontSize: 30,
-    backgroundColor: 'transparent',
+  navLetter: {
+    color: '#ffffff',
+    fontWeight: '800',
   },
   greeting: {
-    fontSize: 20,
-    fontWeight: '700',
     color: '#ffffff',
-    marginBottom: 2,
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
+    fontWeight: '800',
   },
-  date: {
-    fontSize: 12,
+  dateText: {
     color: '#ffffff',
-    opacity: 0.9,
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
-  },
-  headerIcons: {
-    flexDirection: 'row',
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 8,
-  },
-  icon: {
-    fontSize: 30,
-  },
-  // Stats
-  statsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  statCard: {
-    width: '48%',
-    padding: 16,
-    borderRadius: 20,
-    alignItems: 'center',
-    marginBottom: 10,
-    borderWidth: 1,
-  },
-  statIcon: {
-    fontSize: 28,
-    marginBottom: 8,
-  },
-  statValue: {
-    fontSize: 22,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    textAlign: 'center',
+    opacity: 0.8,
   },
   sectionTitle: {
-    fontSize: 20,
+    color: '#ffffff',
     fontWeight: '700',
-    marginBottom: 15,
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
   },
-  quickActionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  actionCard: {
-    width: '48%',
-    padding: 16,
-    borderRadius: 20,
-    alignItems: 'center',
-    marginBottom: 10,
-    borderWidth: 1,
-  },
-  actionIconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  actionIcon: {
-    fontSize: 30,
-  },
-  actionName: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  tasksCard: {
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-  },
-  taskItem: {
+  tasksList: {},
+  taskRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
+    backgroundColor: '#2a2f34',
+    borderWidth: 1,
+    borderColor: '#343a40',
   },
   taskCheckbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    marginRight: 12,
-  },
-  taskContent: {
-    flex: 1,
+    backgroundColor: 'transparent',
   },
   taskTitle: {
-    fontSize: 15,
-    fontWeight: '500',
-    marginBottom: 2,
+    color: '#ffffff',
+    fontWeight: '800',
   },
   taskTime: {
-    fontSize: 12,
+    color: '#b5b5b5',
+    fontWeight: '600',
   },
-  taskSubject: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  taskDivider: {
-    height: 1,
-    width: '100%',
-    marginVertical: 8,
-  },
-  quoteCard: {
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
+  statsCard: {
+    backgroundColor: '#2a2f34',
     borderWidth: 1,
+    borderColor: '#343a40',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 10,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  statCol: {
+    width: '23%',
     alignItems: 'center',
   },
-  quoteIcon: {
-    fontSize: 30,
-    marginBottom: 10,
+  statIcon: {
+    marginBottom: 4,
   },
-  quoteText: {
-    fontSize: 16,
-    fontStyle: 'italic',
+  statValue: {
+    fontWeight: '800',
+  },
+  statLabel: {
+    fontWeight: '600',
     textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 10,
-  },
-  quoteAuthor: {
-    fontSize: 14,
-    fontWeight: '500',
   },
 });
-
-export default DashboardScreen;

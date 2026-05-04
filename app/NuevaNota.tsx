@@ -28,7 +28,7 @@ const NewNoteScreen = () => {
   const [isImportant, setIsImportant] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const theme = Colors.light;
+  const theme = Colors.dark;
   const router = useRouter();
 
   const font = (type: 'sans' | 'rounded' | 'mono' = 'sans') => ({
@@ -116,9 +116,9 @@ const NewNoteScreen = () => {
                 {/* HEADER */}
                 <View style={styles.header}>
                   <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
-                    <Text style={[styles.closeButtonText, { color: theme.text }]}>✕</Text>
+                    <Text style={[styles.closeButtonText]}>✕</Text>
                   </TouchableOpacity>
-                  <Text style={[styles.headerTitle, { color: theme.text }, font('rounded')]}>
+                  <Text style={[styles.headerTitle,  font('rounded')]}>
                     {noteType === 'nota' ? 'Nueva Nota' : 'Nueva Tarea'}
                   </Text>
                   <TouchableOpacity style={styles.saveHeaderButton} onPress={handleSave} disabled={saving}>
@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
   },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    backgroundColor: 'rgba(46, 46, 46, 0.3)',
   },
   safeArea: {
     flex: 1,
@@ -252,6 +252,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 25,
     marginTop: 40,
+    color: '#fff',
   },
   closeButton: {
     width: 40,
@@ -261,10 +262,12 @@ const styles = StyleSheet.create({
   },
   closeButtonText: {
     fontSize: 22,
+    color: '#fff',
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: '600',
+    color: '#fff',
   },
   saveHeaderButton: {
     paddingHorizontal: 12,
