@@ -1,3 +1,4 @@
+// app/(tabs)/NuevaNota.tsx
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
@@ -16,17 +17,24 @@ import {
 } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Colors, getFontFamily } from '../constants/theme';
-import { saveNote } from '../services/database';
+import { saveNote, getDefaultEmoji } from '../services/database';
 
 type NoteType = 'nota' | 'tarea';
+
+interface TaskItem {
+  id: string;
+  text: string;
+  completed: boolean;
+}
 
 const NewNoteScreen = () => {
   const [noteType, setNoteType] = useState<NoteType>('nota');
   const [noteTitle, setNoteTitle] = useState('');
   const [noteContent, setNoteContent] = useState('');
-  const [tasks, setTasks] = useState<string[]>(['']);
+  const [tasks, setTasks] = useState<TaskItem[]>([{ id: Date.now().toString(), text: '', completed: false }]);
   const [isImportant, setIsImportant] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [noteEmoji, setNoteEmoji] = useState('');
 
   const theme = Colors.dark;
   const router = useRouter();
@@ -35,22 +43,33 @@ const NewNoteScreen = () => {
     fontFamily: getFontFamily(Platform.OS, type),
   });
 
+  const generateId = () => Date.now().toString() + Math.random().toString(36).substr(2, 6);
+
   const addTask = () => {
-    setTasks([...tasks, '']);
+    setTasks([...tasks, { id: generateId(), text: '', completed: false }]);
   };
 
   const updateTask = (text: string, index: number) => {
     const newTasks = [...tasks];
-    newTasks[index] = text;
+    newTasks[index].text = text;
+    setTasks(newTasks);
+  };
+
+  const toggleTaskCompleted = (index: number) => {
+    const newTasks = [...tasks];
+    newTasks[index].completed = !newTasks[index].completed;
     setTasks(newTasks);
   };
 
   const removeTask = (index: number) => {
-    const newTasks = tasks.filter((_, i) => i !== index);
-    setTasks(newTasks.length ? newTasks : ['']);
+    if (tasks.length === 1 && !tasks[0].text.trim()) {
+      setTasks([{ id: generateId(), text: '', completed: false }]);
+    } else {
+      const newTasks = tasks.filter((_, i) => i !== index);
+      setTasks(newTasks.length ? newTasks : [{ id: generateId(), text: '', completed: false }]);
+    }
   };
 
-  // ✅ FUNCIÓN handleSave CORREGIDA
   const handleSave = async () => {
     if (!noteTitle.trim()) {
       Alert.alert('Error', 'Por favor ingresa un título');
@@ -58,7 +77,7 @@ const NewNoteScreen = () => {
     }
 
     if (noteType === 'tarea') {
-      const validTasks = tasks.filter(t => t.trim());
+      const validTasks = tasks.filter(t => t.text.trim());
       if (validTasks.length === 0) {
         Alert.alert('Error', 'Agrega al menos una tarea');
         return;
@@ -76,7 +95,8 @@ const NewNoteScreen = () => {
       type: noteType,
       date: dateStr,
       isImportant,
-      tasks: noteType === 'tarea' ? tasks.filter(t => t.trim()) : undefined,
+      tasks: noteType === 'tarea' ? tasks.filter(t => t.text.trim()).map(t => ({ text: t.text, completed: t.completed })) : undefined,
+      emoji: noteEmoji.trim() || undefined,
     };
 
     try {
@@ -111,14 +131,16 @@ const NewNoteScreen = () => {
             <ScrollView 
               contentContainerStyle={styles.scrollContainer}
               showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
             >
               <View style={styles.container}>
                 {/* HEADER */}
                 <View style={styles.header}>
                   <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
-                    <Text style={[styles.closeButtonText]}>✕</Text>
+                    <Text style={styles.closeButtonText}>✕</Text>
                   </TouchableOpacity>
-                  <Text style={[styles.headerTitle,  font('rounded')]}>
+                  <Text style={[styles.headerTitle, font('rounded')]}>
                     {noteType === 'nota' ? 'Nueva Nota' : 'Nueva Tarea'}
                   </Text>
                   <TouchableOpacity style={styles.saveHeaderButton} onPress={handleSave} disabled={saving}>
@@ -126,6 +148,21 @@ const NewNoteScreen = () => {
                       {saving ? 'Guardando...' : 'Guardar'}
                     </Text>
                   </TouchableOpacity>
+                </View>
+
+                {/* Campo de emoji */}
+                <View style={styles.emojiSection}>
+                  <Text style={[styles.emojiLabel, { color: theme.textSecondary }, font('sans')]}>
+                    Icono
+                  </Text>
+                  <TextInput
+                    style={[styles.emojiInput, { color: theme.text, borderColor: theme.border }, font('sans')]}
+                    placeholder="✍️"
+                    placeholderTextColor={theme.textMuted}
+                    value={noteEmoji}
+                    onChangeText={setNoteEmoji}
+                    maxLength={2}
+                  />
                 </View>
 
                 {/* Selector de tipo */}
@@ -199,15 +236,31 @@ const NewNoteScreen = () => {
                     </View>
 
                     {tasks.map((task, index) => (
-                      <View key={index} style={styles.taskItemContainer}>
-                        <View style={[styles.taskBullet, { backgroundColor: theme.bearPrimary }]} />
+                      <View key={task.id} style={styles.taskItemContainer}>
+                        <TouchableOpacity onPress={() => toggleTaskCompleted(index)}>
+                          <View style={[styles.taskCheckbox, { 
+                            backgroundColor: task.completed ? theme.bearPrimary : 'transparent',
+                            borderColor: theme.bearPrimary
+                          }]}>
+                            {task.completed && <Text style={styles.checkmark}>✓</Text>}
+                          </View>
+                        </TouchableOpacity>
+                        
                         <TextInput
-                          style={[styles.taskInput, { color: theme.text }, font('sans')]}
+                          style={[
+                            styles.taskInput, 
+                            { 
+                              color: task.completed ? '#888888' : theme.text,
+                              textDecorationLine: task.completed ? 'line-through' : 'none',
+                            }, 
+                            font('sans')
+                          ]}
                           placeholder={`Tarea ${index + 1}`}
                           placeholderTextColor={theme.textMuted}
-                          value={task}
+                          value={task.text}
                           onChangeText={(text) => updateTask(text, index)}
                         />
+                        
                         <TouchableOpacity onPress={() => removeTask(index)}>
                           <Text style={[styles.removeTaskText, { color: theme.textMuted }]}>✕</Text>
                         </TouchableOpacity>
@@ -244,7 +297,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 10,
-    paddingBottom: 20,
+    paddingBottom: 40,
   },
   header: {
     flexDirection: 'row',
@@ -252,7 +305,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 25,
     marginTop: 40,
-    color: '#fff',
   },
   closeButton: {
     width: 40,
@@ -276,6 +328,22 @@ const styles = StyleSheet.create({
   saveHeaderText: {
     fontSize: 16,
     fontWeight: '500',
+  },
+  emojiSection: {
+    marginBottom: 20,
+  },
+  emojiLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 8,
+    letterSpacing: 1,
+  },
+  emojiInput: {
+    padding: 12,
+    fontSize: 40,
+    textAlign: 'center',
+    width: 80,
+    marginLeft: -17,
   },
   typeSelector: {
     flexDirection: 'row',
@@ -325,6 +393,7 @@ const styles = StyleSheet.create({
   },
   tasksSection: {
     marginTop: 5,
+    marginBottom: 20,
   },
   tasksHeader: {
     flexDirection: 'row',
@@ -347,11 +416,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 15,
   },
-  taskBullet: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+  taskCheckbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 12,
+  },
+  checkmark: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   taskInput: {
     flex: 1,

@@ -1,7 +1,11 @@
-import { getCurrentUser } from './auth'; 
+// services/database.ts
 import * as SQLite from 'expo-sqlite';
+import { getCurrentUser } from './auth';
 
-//interfaz a usar para la gente cool que se hace notar
+// ========== CONSTANTES Y TIPOS ==========
+
+const DEFAULT_EMOJIS = ['📝', '📌', '💡', '📖', '✏️', '📓', '📚', '🔖', '✨', '⭐', '🌸', '🎯'];
+
 export interface Note {
   id: string;
   userId: string;     
@@ -10,9 +14,10 @@ export interface Note {
   type: 'nota' | 'tarea';
   date: string;
   isImportant: boolean;
-  tasks?: string[];
+  tasks?: any[];
+  emoji?: string;
 }
-//interfaz para sqlite 
+
 interface NoteRow {
   id: string;
   userId: string;
@@ -22,16 +27,57 @@ interface NoteRow {
   date: string;
   isImportant: number;
   tasks: string | null;
+  emoji: string | null;
 }
-//obtener bd
+
+// ========== GESTIÓN DE BASE DE DATOS ==========
+
 let database: SQLite.SQLiteDatabase | null = null;
+let isInitialized = false;
+
 const getDatabase = (): SQLite.SQLiteDatabase => {
   if (!database) {
-    database = SQLite.openDatabaseSync('notes.db');
+    try {
+      database = SQLite.openDatabaseSync('notes.db');
+      console.log('✅ SQLite abierta');
+    } catch (error) {
+      console.error('❌ Error al abrir SQLite:', error);
+      throw error;
+    }
   }
   return database;
 };
-//convertir notasrow a notas
+
+const getCurrentUserId = (): string | null => {
+  try {
+    const user = getCurrentUser();
+    return user?.uid || null;
+  } catch (error) {
+    console.error('Error al obtener usuario:', error);
+    return null;
+  }
+};
+
+const getConsistentEmoji = (id: string): string => {
+  const index = Math.abs(id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % DEFAULT_EMOJIS.length;
+  return DEFAULT_EMOJIS[index];
+};
+
+export const getDefaultEmoji = (title?: string): string => {
+  if (title && title.length > 0) {
+    const firstChar = title.charAt(0).toUpperCase();
+    const emojiMap: { [key: string]: string } = {
+      'A': '🍎', 'B': '📘', 'C': '☕', 'D': '🎵', 'E': '📧', 'F': '🔥',
+      'G': '🎮', 'H': '❤️', 'I': '💡', 'J': '👑', 'K': '🔑', 'L': '📒',
+      'M': '📱', 'N': '📰', 'O': '🕒', 'P': '📌', 'Q': '❓', 'R': '🎀',
+      'S': '⭐', 'T': '📏', 'U': '☂️', 'V': '✅', 'W': '🌍', 'X': '❌',
+      'Y': '💛', 'Z': '⚡'
+    };
+    return emojiMap[firstChar] || DEFAULT_EMOJIS[Math.floor(Math.random() * DEFAULT_EMOJIS.length)];
+  }
+  return DEFAULT_EMOJIS[Math.floor(Math.random() * DEFAULT_EMOJIS.length)];
+};
+
 const mapRowToNote = (row: NoteRow): Note => {
   return {
     id: row.id,
@@ -42,14 +88,28 @@ const mapRowToNote = (row: NoteRow): Note => {
     date: row.date,
     isImportant: row.isImportant === 1,
     tasks: row.tasks ? JSON.parse(row.tasks) : undefined,
+    emoji: row.emoji || getConsistentEmoji(row.id),
   };
 };
 
-//inicializacion
+// ========== INICIALIZACIÓN ==========
+
 export const initDatabase = async (): Promise<void> => {
   try {
-    const database = getDatabase();
-    await database.execAsync(`
+    const user = getCurrentUser();
+    if (!user) {
+      console.log('⚠️ No hay usuario autenticado, omitiendo inicialización de SQLite');
+      return;
+    }
+    
+    if (isInitialized) {
+      console.log('ℹ️ SQLite ya inicializada');
+      return;
+    }
+    
+    const db = getDatabase();
+    
+    await db.execAsync(`
       CREATE TABLE IF NOT EXISTS notes (
         id TEXT PRIMARY KEY,
         userId TEXT NOT NULL,
@@ -58,28 +118,43 @@ export const initDatabase = async (): Promise<void> => {
         type TEXT NOT NULL,
         date TEXT NOT NULL,
         isImportant INTEGER DEFAULT 0,
-        tasks TEXT
+        tasks TEXT,
+        emoji TEXT
       );
     `);
-    console.log('!!!!! Base de datos inicializada correctamente');
+    
+    try {
+      await db.execAsync(`ALTER TABLE notes ADD COLUMN emoji TEXT;`);
+      console.log('✅ Columna emoji añadida');
+    } catch (e: any) {
+      // La columna ya existe, ignorar
+    }
+    
+    // Crear índice para mejorar rendimiento
+    try {
+      await db.execAsync(`CREATE INDEX IF NOT EXISTS idx_notes_userId ON notes(userId);`);
+      await db.execAsync(`CREATE INDEX IF NOT EXISTS idx_notes_date ON notes(date DESC);`);
+    } catch (indexError) {
+      console.log('ℹ️ Índices ya existen o error:', indexError);
+    }
+    
+    isInitialized = true;
+    console.log('✅ Base de datos SQLite inicializada correctamente');
   } catch (error) {
-    console.error('Error al inicializar DB:', error);
-    throw error;
+    console.error('❌ Error en initDatabase:', error);
   }
 };
 
-// obtener el usuario actual
-const getCurrentUserId = (): string | null => {
-  const user = getCurrentUser();
-  return user?.uid || null;
-};
+// ========== OPERACIONES CRUD ==========
 
-// obtener todas las notas del usuario actual
 export const getAllNotes = async (): Promise<Note[]> => {
+  const userId = getCurrentUserId();
+  if (!userId) {
+    console.log('⚠️ No hay usuario autenticado, retornando array vacío');
+    return [];
+  }
+  
   try {
-    const userId = getCurrentUserId();
-    if (!userId) return [];
-    
     const database = getDatabase();
     const result = await database.getAllAsync(
       'SELECT * FROM notes WHERE userId = ? ORDER BY date DESC',
@@ -92,12 +167,14 @@ export const getAllNotes = async (): Promise<Note[]> => {
   }
 };
 
-// obtener notas por TIPO nota o trea
 export const getNotesByType = async (type: 'nota' | 'tarea'): Promise<Note[]> => {
+  const userId = getCurrentUserId();
+  if (!userId) {
+    console.log('⚠️ No hay usuario autenticado, retornando array vacío');
+    return [];
+  }
+  
   try {
-    const userId = getCurrentUserId();
-    if (!userId) return [];
-    
     const database = getDatabase();
     const result = await database.getAllAsync(
       'SELECT * FROM notes WHERE userId = ? AND type = ? ORDER BY date DESC',
@@ -110,20 +187,18 @@ export const getNotesByType = async (type: 'nota' | 'tarea'): Promise<Note[]> =>
   }
 };
 
-// Obtener n0ta por ID
 export const getNoteById = async (id: string): Promise<Note | null> => {
+  const userId = getCurrentUserId();
+  if (!userId) return null;
+  
   try {
-    const userId = getCurrentUserId();
-    if (!userId) return null;
-    
     const database = getDatabase();
     const result = await database.getFirstAsync(
       'SELECT * FROM notes WHERE id = ? AND userId = ?',
       [id, userId]
     );
     if (result) {
-      const row = result as NoteRow;
-      return mapRowToNote(row);
+      return mapRowToNote(result as NoteRow);
     }
     return null;
   } catch (error) {
@@ -132,22 +207,22 @@ export const getNoteById = async (id: string): Promise<Note | null> => {
   }
 };
 
-// guardar nota nueva
 export const saveNote = async (note: Omit<Note, 'id' | 'userId'> & { id?: string }) => {
+  const userId = getCurrentUserId();
+  if (!userId) {
+    return { success: false, error: 'Usuario no autenticado' };
+  }
+  
   try {
-    const userId = getCurrentUserId();
-    if (!userId) {
-      return { success: false, error: 'Usuario no autenticado' };
-    }
-    
     const database = getDatabase();
     const id = note.id || Date.now().toString();
     const tasksJSON = note.tasks ? JSON.stringify(note.tasks) : null;
+    const emoji = note.emoji || getDefaultEmoji(note.title);
     
     await database.runAsync(
-      `INSERT OR REPLACE INTO notes (id, userId, title, content, type, date, isImportant, tasks) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, userId, note.title, note.content || '', note.type, note.date, note.isImportant ? 1 : 0, tasksJSON]
+      `INSERT OR REPLACE INTO notes (id, userId, title, content, type, date, isImportant, tasks, emoji) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, userId, note.title, note.content || '', note.type, note.date, note.isImportant ? 1 : 0, tasksJSON, emoji]
     );
     return { success: true, id };
   } catch (error) {
@@ -156,18 +231,11 @@ export const saveNote = async (note: Omit<Note, 'id' | 'userId'> & { id?: string
   }
 };
 
-// actualizar nota
 export const updateNote = async (id: string, updates: Partial<Note>) => {
+  const userId = getCurrentUserId();
+  if (!userId) return { success: false, error: 'Usuario no autenticado' };
+  
   try {
-    const userId = getCurrentUserId();
-    if (!userId) return { success: false, error: 'Usuario no autenticado' };
-    
-    // Verificar que la nota pertenece al usuario
-    const existingNote = await getNoteById(id);
-    if (!existingNote) {
-      return { success: false, error: 'Nota no encontrada' };
-    }
-    
     const database = getDatabase();
     const fields: string[] = [];
     const values: any[] = [];
@@ -192,6 +260,10 @@ export const updateNote = async (id: string, updates: Partial<Note>) => {
       fields.push('tasks = ?');
       values.push(JSON.stringify(updates.tasks));
     }
+    if (updates.emoji !== undefined) {
+      fields.push('emoji = ?');
+      values.push(updates.emoji);
+    }
     
     if (fields.length === 0) {
       return { success: true };
@@ -210,12 +282,12 @@ export const updateNote = async (id: string, updates: Partial<Note>) => {
     return { success: false, error };
   }
 };
-//eliminar nota
+
 export const deleteNote = async (id: string) => {
+  const userId = getCurrentUserId();
+  if (!userId) return { success: false, error: 'Usuario no autenticado' };
+  
   try {
-    const userId = getCurrentUserId();
-    if (!userId) return { success: false, error: 'Usuario no autenticado' };
-    
     const database = getDatabase();
     await database.runAsync(
       'DELETE FROM notes WHERE id = ? AND userId = ?',
@@ -228,9 +300,7 @@ export const deleteNote = async (id: string) => {
   }
 };
 
-//==============================MAPAS
-
-// services/database.ts
+// ========== PUNTOS DE ESTUDIO (MAPAS) ==========
 
 export interface StudyPoint {
   id: string;
@@ -242,97 +312,122 @@ export interface StudyPoint {
   notes?: string;
 }
 
-// Inicializar tabla de puntos de estudio
 export const initStudyPointsTable = async () => {
-  const database = getDatabase();
-  await database.execAsync(`
-    CREATE TABLE IF NOT EXISTS study_points (
-      id TEXT PRIMARY KEY,
-      userId TEXT NOT NULL,
-      name TEXT NOT NULL,
-      latitude REAL NOT NULL,
-      longitude REAL NOT NULL,
-      createdAt TEXT NOT NULL,
-      notes TEXT
-    );
-  `);
-  console.log('✅ Tabla de puntos de estudio inicializada');
+  const userId = getCurrentUserId();
+  if (!userId) {
+    console.log('⚠️ No hay usuario autenticado, omitiendo inicialización de study_points');
+    return;
+  }
+  
+  try {
+    const database = getDatabase();
+    await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS study_points (
+        id TEXT PRIMARY KEY,
+        userId TEXT NOT NULL,
+        name TEXT NOT NULL,
+        latitude REAL NOT NULL,
+        longitude REAL NOT NULL,
+        createdAt TEXT NOT NULL,
+        notes TEXT
+      );
+    `);
+    console.log('✅ Tabla de puntos de estudio inicializada');
+  } catch (error) {
+    console.error('Error al inicializar study_points:', error);
+  }
 };
 
-// Obtener puntos de estudio del usuario
 export const getStudyPoints = async (): Promise<StudyPoint[]> => {
   const userId = getCurrentUserId();
   if (!userId) return [];
   
-  const database = getDatabase();
-  const result = await database.getAllAsync(
-    'SELECT * FROM study_points WHERE userId = ? ORDER BY createdAt DESC',
-    [userId]
-  );
-  return result as StudyPoint[];
+  try {
+    const database = getDatabase();
+    const result = await database.getAllAsync(
+      'SELECT * FROM study_points WHERE userId = ? ORDER BY createdAt DESC',
+      [userId]
+    );
+    return result as StudyPoint[];
+  } catch (error) {
+    console.error('Error al obtener puntos de estudio:', error);
+    return [];
+  }
 };
 
-// Guardar punto de estudio
 export const saveStudyPoint = async (point: Omit<StudyPoint, 'id' | 'userId' | 'createdAt'>): Promise<boolean> => {
   const userId = getCurrentUserId();
   if (!userId) return false;
   
-  const database = getDatabase();
-  const id = Date.now().toString();
-  const createdAt = new Date().toISOString();
-  
-  await database.runAsync(
-    `INSERT INTO study_points (id, userId, name, latitude, longitude, createdAt, notes) 
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [id, userId, point.name, point.latitude, point.longitude, createdAt, point.notes || null]
-  );
-  return true;
+  try {
+    const database = getDatabase();
+    const id = Date.now().toString();
+    const createdAt = new Date().toISOString();
+    
+    await database.runAsync(
+      `INSERT INTO study_points (id, userId, name, latitude, longitude, createdAt, notes) 
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id, userId, point.name, point.latitude, point.longitude, createdAt, point.notes || null]
+    );
+    return true;
+  } catch (error) {
+    console.error('Error al guardar punto de estudio:', error);
+    return false;
+  }
 };
 
-// Eliminar punto de estudio
 export const deleteStudyPoint = async (id: string): Promise<boolean> => {
   const userId = getCurrentUserId();
   if (!userId) return false;
   
-  const database = getDatabase();
-  await database.runAsync('DELETE FROM study_points WHERE id = ? AND userId = ?', [id, userId]);
-  return true;
+  try {
+    const database = getDatabase();
+    await database.runAsync('DELETE FROM study_points WHERE id = ? AND userId = ?', [id, userId]);
+    return true;
+  } catch (error) {
+    console.error('Error al eliminar punto de estudio:', error);
+    return false;
+  }
 };
 
-// Actualizar punto de estudio
 export const updateStudyPoint = async (id: string, updates: Partial<StudyPoint>): Promise<boolean> => {
   const userId = getCurrentUserId();
   if (!userId) return false;
   
-  const database = getDatabase();
-  const fields: string[] = [];
-  const values: any[] = [];
-  
-  if (updates.name !== undefined) {
-    fields.push('name = ?');
-    values.push(updates.name);
+  try {
+    const database = getDatabase();
+    const fields: string[] = [];
+    const values: any[] = [];
+    
+    if (updates.name !== undefined) {
+      fields.push('name = ?');
+      values.push(updates.name);
+    }
+    if (updates.notes !== undefined) {
+      fields.push('notes = ?');
+      values.push(updates.notes);
+    }
+    if (updates.latitude !== undefined) {
+      fields.push('latitude = ?');
+      values.push(updates.latitude);
+    }
+    if (updates.longitude !== undefined) {
+      fields.push('longitude = ?');
+      values.push(updates.longitude);
+    }
+    
+    if (fields.length === 0) return true;
+    
+    values.push(id);
+    values.push(userId);
+    
+    await database.runAsync(
+      `UPDATE study_points SET ${fields.join(', ')} WHERE id = ? AND userId = ?`,
+      values
+    );
+    return true;
+  } catch (error) {
+    console.error('Error al actualizar punto de estudio:', error);
+    return false;
   }
-  if (updates.notes !== undefined) {
-    fields.push('notes = ?');
-    values.push(updates.notes);
-  }
-  if (updates.latitude !== undefined) {
-    fields.push('latitude = ?');
-    values.push(updates.latitude);
-  }
-  if (updates.longitude !== undefined) {
-    fields.push('longitude = ?');
-    values.push(updates.longitude);
-  }
-  
-  if (fields.length === 0) return true;
-  
-  values.push(id);
-  values.push(userId);
-  
-  await database.runAsync(
-    `UPDATE study_points SET ${fields.join(', ')} WHERE id = ? AND userId = ?`,
-    values
-  );
-  return true;
 };

@@ -1,3 +1,5 @@
+// services/auth.ts - Versión simplificada (sin RTDB en registro)
+
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword,
@@ -9,9 +11,22 @@ import {
   EmailAuthProvider,
   deleteUser  
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { auth, db } from './firebase';
-
+import { 
+  doc, 
+  setDoc, 
+  getDoc, 
+  updateDoc, 
+  deleteDoc 
+} from 'firebase/firestore';
+import { 
+  ref, 
+  uploadBytes, 
+  getDownloadURL, 
+  deleteObject 
+} from 'firebase/storage';
+import { auth, db, storage } from './firebase';
+import * as ImagePicker from 'expo-image-picker';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 
 export interface UserData {
   uid: string;
@@ -20,37 +35,196 @@ export interface UserData {
   createdAt: string;
   lastLogin: string;
   photoURL?: string;
+  bannerURL?: string | null;
+  avatarURL?: string | null;
+  backgroundURL?: string | null;
+  coverURL?: string | null;
   racha?: number;
   horasEstudio?: number;
   tareasCompletadas?: number;
+  recompensas?: number;
   modoOscuro?: boolean;
   notificaciones?: boolean;
   recordatorios?: boolean;
   sonidos?: boolean;
-  totalPomodoros?: number;    // Total de pomodoros completados históricos
-  pomodorosHoy?: number;      // Pomodoros completados hoy
-  minutosEstudioHoy?: number; // Minutos estudiados hoy
-  ultimoDiaEstudio?: string;  // Fecha del último estudio (para racha)
+  totalPomodoros?: number;
+  pomodorosHoy?: number;
+  minutosEstudioHoy?: number;
+  ultimoDiaEstudio?: string | null; // 🔥 Permitir null
+  fraseMotivacional?: string;
+  autorFrase?: string;
 }
 
-//funciones basicas de autenticacion
-//encontrar usuario
+// ========== FUNCIONES PARA MANEJAR IMÁGENES ==========
+
+const processImage = async (uri: string): Promise<string> => {
+  try {
+    const result = await manipulateAsync(
+      uri,
+      [{ resize: { width: 800 } }],
+      { compress: 0.7, format: SaveFormat.JPEG }
+    );
+    return result.uri;
+  } catch (error) {
+    console.log('Error al procesar imagen:', error);
+    return uri;
+  }
+};
+
+export const uploadUserAvatar = async (
+  uid: string,
+  imageUri: string
+): Promise<{ success: boolean; url?: string; error?: string }> => {
+  try {
+    const processedUri = await processImage(imageUri);
+    const response = await fetch(processedUri);
+    const blob = await response.blob();
+    
+    const imageRef = ref(storage, `users/${uid}/avatar.jpg`);
+    await uploadBytes(imageRef, blob);
+    
+    const downloadUrl = await getDownloadURL(imageRef);
+    
+    const userRef = doc(db, 'users', uid);
+    await updateDoc(userRef, { avatarURL: downloadUrl });
+    
+    const user = auth.currentUser;
+    if (user) {
+      await firebaseUpdateProfile(user, { photoURL: downloadUrl });
+    }
+    
+    return { success: true, url: downloadUrl };
+  } catch (error: any) {
+    console.log('Error al subir avatar:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+export const uploadUserBanner = async (
+  uid: string,
+  imageUri: string
+): Promise<{ success: boolean; url?: string; error?: string }> => {
+  try {
+    const result = await manipulateAsync(
+      imageUri,
+      [{ resize: { width: 1200 } }],
+      { compress: 0.7, format: SaveFormat.JPEG }
+    );
+    
+    const response = await fetch(result.uri);
+    const blob = await response.blob();
+    
+    const imageRef = ref(storage, `users/${uid}/banner.jpg`);
+    await uploadBytes(imageRef, blob);
+    
+    const downloadUrl = await getDownloadURL(imageRef);
+    
+    const userRef = doc(db, 'users', uid);
+    await updateDoc(userRef, { bannerURL: downloadUrl });
+    
+    return { success: true, url: downloadUrl };
+  } catch (error: any) {
+    console.log('Error al subir banner:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+export const deleteUserAvatar = async (uid: string): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const imageRef = ref(storage, `users/${uid}/avatar.jpg`);
+    await deleteObject(imageRef);
+    
+    const userRef = doc(db, 'users', uid);
+    await updateDoc(userRef, { avatarURL: null });
+    
+    return { success: true };
+  } catch (error: any) {
+    if (error.code === 'storage/object-not-found') {
+      return { success: true };
+    }
+    console.log('Error al eliminar avatar:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+export const deleteUserBanner = async (uid: string): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const imageRef = ref(storage, `users/${uid}/banner.jpg`);
+    await deleteObject(imageRef);
+    
+    const userRef = doc(db, 'users', uid);
+    await updateDoc(userRef, { bannerURL: null });
+    
+    return { success: true };
+  } catch (error: any) {
+    if (error.code === 'storage/object-not-found') {
+      return { success: true };
+    }
+    console.log('Error al eliminar banner:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+export const pickImage = async (): Promise<string | null> => {
+  try {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+    
+    if (!result.canceled) {
+      return result.assets[0].uri;
+    }
+    return null;
+  } catch (error) {
+    console.log('Error al seleccionar imagen:', error);
+    return null;
+  }
+};
+
+export const takePhoto = async (): Promise<string | null> => {
+  try {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    
+    if (status !== 'granted') {
+      alert('Se necesita permiso para usar la cámara');
+      return null;
+    }
+    
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+    
+    if (!result.canceled) {
+      return result.assets[0].uri;
+    }
+    return null;
+  } catch (error) {
+    console.log('Error al tomar foto:', error);
+    return null;
+  }
+};
+
+// ========== FUNCIONES DE AUTENTICACIÓN ==========
+
 export const getCurrentUser = (): User | null => {
   return auth.currentUser;
 };
 
 export { auth };
 
-// Obtener datos del usuario desde Firestore (con nombre de Auth también)
 export const getUserData = async (uid: string): Promise<UserData | null> => {
   try {
-    const user = auth.currentUser;
     const docRef = doc(db, 'users', uid);
     const docSnap = await getDoc(docRef);
     
     if (docSnap.exists()) {
       const data = docSnap.data() as UserData;
-      // Asegurar que el nombre de Auth está sincronizado
+      const user = auth.currentUser;
       if (user?.displayName && !data.displayName) {
         data.displayName = user.displayName;
       }
@@ -63,8 +237,12 @@ export const getUserData = async (uid: string): Promise<UserData | null> => {
   }
 };
 
-// Obtener perfil completo (nombre y email desde Auth + Firestore)
-export const getUserProfile = async (): Promise<{ nombre: string; email: string } | null> => {
+export const getUserProfile = async (): Promise<{ 
+  nombre: string; 
+  email: string; 
+  avatarURL?: string; 
+  bannerURL?: string;
+} | null> => {
   try {
     const user = auth.currentUser;
     if (!user) return null;
@@ -72,20 +250,21 @@ export const getUserProfile = async (): Promise<{ nombre: string; email: string 
     let nombre = user.displayName || "";
     const email = user.email || "";
     
-    // Intentar obtener datos de Firestore (por si el nombre está allí)
     const userData = await getUserData(user.uid);
+    const avatarURL = userData?.avatarURL || user.photoURL || undefined;
+    const bannerURL = userData?.bannerURL || undefined;
+    
     if (userData?.displayName && !nombre) {
       nombre = userData.displayName;
     }
     
-    return { nombre, email };
+    return { nombre, email, avatarURL, bannerURL };
   } catch (error) {
     console.log('Error al obtener perfil:', error);
     return null;
   }
 };
 
-// Registrar nuevo usuario
 export const registerUser = async (
   email: string,
   password: string,
@@ -95,31 +274,37 @@ export const registerUser = async (
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
 
-    // ✅ Actualizar perfil en Firebase Auth
     await firebaseUpdateProfile(user, { displayName });
 
-    // ✅ Guardar datos adicionales en Firestore
+    // 🔥 CORREGIDO: Eliminar undefined, usar null en su lugar
     const userData: UserData = {
-  uid: user.uid,
-  email: user.email!,
-  displayName,
-  createdAt: new Date().toISOString(),
-  lastLogin: new Date().toISOString(),
-  racha: 0,
-  horasEstudio: 0,
-  tareasCompletadas: 0,
-  modoOscuro: true,
-  notificaciones: true,
-  recordatorios: true,
-  sonidos: false,
-  // ✅ AGREGAR VALORES INICIALES:
-  totalPomodoros: 0,
-  pomodorosHoy: 0,
-  minutosEstudioHoy: 0,
-  ultimoDiaEstudio: undefined,
-};
+      uid: user.uid,
+      email: user.email!,
+      displayName,
+      createdAt: new Date().toISOString(),
+      lastLogin: new Date().toISOString(),
+      racha: 0,
+      horasEstudio: 0,
+      tareasCompletadas: 0,
+      recompensas: 0,
+      modoOscuro: true,
+      notificaciones: true,
+      recordatorios: true,
+      sonidos: false,
+      totalPomodoros: 0,
+      pomodorosHoy: 0,
+      minutosEstudioHoy: 0,
+      ultimoDiaEstudio: null, // 🔥 Cambiar undefined por null
+      avatarURL: null, // 🔥 También cambiar estos
+      bannerURL: null,
+      backgroundURL: null,
+      coverURL: null,
+      fraseMotivacional: "¡Sigue así! Cada día es una oportunidad",
+      autorFrase: "CokoNotion",
+    };
 
     await setDoc(doc(db, 'users', user.uid), userData);
+    console.log('✅ Usuario guardado en Firestore');
 
     return { success: true, user };
   } catch (error: any) {
@@ -138,14 +323,13 @@ export const registerUser = async (
         errorMessage = 'La contraseña debe tener al menos 6 caracteres';
         break;
       default:
-        errorMessage = 'Error al registrar usuario. Intenta nuevamente';
+        errorMessage = error.message || 'Error al registrar usuario';
     }
     
     return { success: false, error: errorMessage };
   }
 };
 
-// Iniciar sesión
 export const loginUser = async (
   email: string,
   password: string
@@ -154,7 +338,6 @@ export const loginUser = async (
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
 
-    // Actualizar último login en Firestore
     await updateDoc(doc(db, 'users', user.uid), {
       lastLogin: new Date().toISOString()
     });
@@ -177,9 +360,6 @@ export const loginUser = async (
       case 'auth/too-many-requests':
         errorMessage = 'Demasiados intentos. Intenta más tarde';
         break;
-      case 'auth/network-request-failed':
-        errorMessage = 'Error de conexión. Verifica tu internet';
-        break;
       default:
         errorMessage = 'Error al iniciar sesión. Intenta nuevamente';
     }
@@ -188,7 +368,6 @@ export const loginUser = async (
   }
 };
 
-// Cerrar sesión
 export const logoutUser = async (): Promise<{ success: boolean; error?: string }> => {
   try {
     await signOut(auth);
@@ -199,7 +378,6 @@ export const logoutUser = async (): Promise<{ success: boolean; error?: string }
   }
 };
 
-// Recuperar contraseña
 export const resetPassword = async (email: string): Promise<{ success: boolean; error?: string }> => {
   try {
     await sendPasswordResetEmail(auth, email);
@@ -224,9 +402,8 @@ export const resetPassword = async (email: string): Promise<{ success: boolean; 
   }
 };
 
-// ========== FUNCIONES DE FIRESTORE ==========
+// ========== FUNCIONES DE ACTUALIZACIÓN ==========
 
-// services/auth.ts - Actualizar updateUserProfile
 export const updateUserProfile = async (
   uid: string,
   updates: {
@@ -245,40 +422,35 @@ export const updateUserProfile = async (
       return { success: false, error: 'No hay usuario autenticado' };
     }
     
-    // ✅ Actualizar email (requiere reautenticación reciente)
+    // Actualizar email en Auth
     if (updates.email && user && updates.email !== user.email) {
       try {
-        console.log('Intentando cambiar email a:', updates.email);
         await firebaseUpdateEmail(user, updates.email);
-        console.log('Email actualizado correctamente');
+        console.log('✅ Email actualizado en Auth');
       } catch (emailError: any) {
         console.log('Error al actualizar email:', emailError.code);
-        
         switch (emailError.code) {
           case 'auth/email-already-in-use':
             return { success: false, error: 'Este correo ya está en uso por otra cuenta' };
-          case 'auth/operation-not-allowed':
-            return { success: false, error: 'El cambio de correo no está habilitado. Verifica que Email/Password esté activado en Firebase Console' };
           case 'auth/requires-recent-login':
-            return { success: false, error: 'Por seguridad, debes volver a iniciar sesión antes de cambiar tu correo' };
-          case 'auth/invalid-email':
-            return { success: false, error: 'Correo electrónico inválido' };
+            return { success: false, error: 'Por seguridad, debes volver a iniciar sesión' };
           default:
             return { success: false, error: `Error al cambiar email: ${emailError.code}` };
         }
       }
     }
     
-    // ✅ Actualizar nombre
+    // Actualizar nombre en Auth
     if (updates.displayName && user && updates.displayName !== user.displayName) {
       try {
         await firebaseUpdateProfile(user, { displayName: updates.displayName });
+        console.log('✅ Nombre actualizado en Auth');
       } catch (profileError: any) {
         console.log('Error al actualizar nombre:', profileError.code);
       }
     }
     
-    // ✅ Actualizar en Firestore
+    // 🔥 CORREGIDO: Definir userRef correctamente
     const userRef = doc(db, 'users', uid);
     const updateData: any = {};
     
@@ -289,9 +461,17 @@ export const updateUserProfile = async (
     if (updates.recordatorios !== undefined) updateData.recordatorios = updates.recordatorios;
     if (updates.sonidos !== undefined) updateData.sonidos = updates.sonidos;
     
+    // Eliminar undefined
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === undefined) {
+        delete updateData[key];
+      }
+    });
+    
     updateData.lastLogin = new Date().toISOString();
     
     await updateDoc(userRef, updateData);
+    console.log('✅ Datos actualizados en Firestore');
     
     return { success: true };
   } catch (error: any) {
@@ -300,33 +480,17 @@ export const updateUserProfile = async (
   }
 };
 
-// Actualizar preferencias del usuario
-export const updateUserPreferences = async (
-  uid: string,
-  preferences: {
-    modoOscuro?: boolean;
-    notificaciones?: boolean;
-    recordatorios?: boolean;
-    sonidos?: boolean;
-  }
-): Promise<{ success: boolean; error?: string }> => {
-  try {
-    const userRef = doc(db, 'users', uid);
-    await updateDoc(userRef, preferences);
-    return { success: true };
-  } catch (error) {
-    console.log('Error al actualizar preferencias:', error);
-    return { success: false, error: 'Error al actualizar preferencias' };
-  }
-};
-
-// Actualizar estadísticas del usuario
 export const updateUserStats = async (
   uid: string,
   stats: {
     racha?: number;
     horasEstudio?: number;
     tareasCompletadas?: number;
+    recompensas?: number;
+    totalPomodoros?: number;
+    pomodorosHoy?: number;
+    minutosEstudioHoy?: number;
+    ultimoDiaEstudio?: string;
   }
 ): Promise<{ success: boolean; error?: string }> => {
   try {
@@ -338,7 +502,47 @@ export const updateUserStats = async (
     return { success: false, error: 'Error al actualizar estadísticas' };
   }
 };
-// services/auth.ts - Mejorar reauthenticateUser
+
+export const updateUserPhrase = async (
+  uid: string,
+  frase: string,
+  autor?: string
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const userRef = doc(db, 'users', uid);
+    const updates: any = { fraseMotivacional: frase };
+    if (autor !== undefined) {
+      updates.autorFrase = autor;
+    }
+    await updateDoc(userRef, updates);
+    return { success: true };
+  } catch (error) {
+    console.error('Error al actualizar frase:', error);
+    return { success: false, error: 'Error al actualizar la frase' };
+  }
+};
+
+export const getUserPhrase = async (uid: string): Promise<{ frase: string; autor: string } | null> => {
+  try {
+    const userRef = doc(db, 'users', uid);
+    const docSnap = await getDoc(userRef);
+    
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      return {
+        frase: data.fraseMotivacional || "¡Sigue así! Cada día es una oportunidad",
+        autor: data.autorFrase || "CokoNotion"
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error al obtener frase:', error);
+    return null;
+  }
+};
+
+// ========== FUNCIONES DE REAUTHENTICACIÓN Y ELIMINACIÓN ==========
+
 export const reauthenticateUser = async (password: string): Promise<{ success: boolean; error?: string }> => {
   try {
     const user = auth.currentUser;
@@ -346,7 +550,6 @@ export const reauthenticateUser = async (password: string): Promise<{ success: b
       return { success: false, error: 'No hay usuario autenticado' };
     }
     
-    // Crear credencial con email y contraseña
     const credential = EmailAuthProvider.credential(user.email, password);
     await reauthenticateWithCredential(user, credential);
     return { success: true };
@@ -358,10 +561,6 @@ export const reauthenticateUser = async (password: string): Promise<{ success: b
         return { success: false, error: 'Contraseña incorrecta' };
       case 'auth/too-many-requests':
         return { success: false, error: 'Demasiados intentos. Intenta más tarde' };
-      case 'auth/user-mismatch':
-        return { success: false, error: 'Usuario no coincide' };
-      case 'auth/network-request-failed':
-        return { success: false, error: 'Error de conexión. Verifica tu internet' };
       default:
         return { success: false, error: `Error al verificar: ${error.code}` };
     }
@@ -378,14 +577,19 @@ export const deleteCurrentAccount = async (
       return { success: false, error: 'No hay usuario autenticado' };
     }
     
-    // ✅ Reautenticar al usuario antes de eliminar
     const credential = EmailAuthProvider.credential(user.email, password);
     await reauthenticateWithCredential(user, credential);
     
-    // ✅ Eliminar datos del usuario en Firestore
-    await deleteDoc(doc(db, 'users', user.uid));
+    try {
+      const avatarRef = ref(storage, `users/${user.uid}/avatar.jpg`);
+      await deleteObject(avatarRef);
+      const bannerRef = ref(storage, `users/${user.uid}/banner.jpg`);
+      await deleteObject(bannerRef);
+    } catch (storageError) {
+      console.log('No se encontraron imágenes para eliminar');
+    }
     
-    // ✅ Eliminar la cuenta de Firebase Auth
+    await deleteDoc(doc(db, 'users', user.uid));
     await deleteUser(user);
     
     return { success: true };
@@ -397,14 +601,8 @@ export const deleteCurrentAccount = async (
       case 'auth/wrong-password':
         errorMessage = 'Contraseña incorrecta';
         break;
-      case 'auth/too-many-requests':
-        errorMessage = 'Demasiados intentos. Intenta más tarde';
-        break;
       case 'auth/requires-recent-login':
-        errorMessage = 'Por seguridad, debes volver a iniciar sesión antes de eliminar tu cuenta';
-        break;
-      case 'auth/network-request-failed':
-        errorMessage = 'Error de conexión. Verifica tu internet';
+        errorMessage = 'Por seguridad, debes volver a iniciar sesión';
         break;
       default:
         errorMessage = `Error al eliminar cuenta: ${error.code}`;

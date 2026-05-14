@@ -68,12 +68,12 @@ export const Colors: {
     textMuted: '#4a4a4a', // Gris oscuro (antes era #999999)
     
     // Colores gloomy (rosas)
-    bearPrimary: '#e097dd', // COLORES PRINCIPALES
-    bearSecondary: '#7e156e', // Rosa más oscuro aún
-    bearLight: '#e9b6ff',
-    bearSoft: '#f1d0f8',
-    bearShadow: '#84247a',
-    bearAccent: '#dd94e0',
+    bearPrimary: '#e6dee6', // COLORES PRINCIPALES
+    bearSecondary: '#70626e', // Rosa más oscuro aún
+    bearLight: '#e7dceb',
+    bearSoft: '#dad2dc',
+    bearShadow: '#817a80',
+    bearAccent: '#dac5db',
     
     // iOS específicos
     iosBlue: '#007AFF',
@@ -92,12 +92,12 @@ export const Colors: {
     textSecondary: '#e0e0e0', // Más claro
     textMuted: '#b0b0b0', // Más claro
     
-    bearPrimary: '#e997ce',
-    bearSecondary: '#cc70a6',
-    bearLight: '#ffb6d9',
+    bearPrimary: '#b0a2ab',
+    bearSecondary: '#8f7c87',
+    bearLight: '#c5c5c5',
     bearSoft: '#2a1a22',
     bearShadow: '#adb4c5',
-    bearAccent: '#6b97d1',
+    bearAccent: '#bcafbc',
     
     iosBlue: '#0A84FF',
     iosGray: '#98989E',

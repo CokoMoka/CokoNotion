@@ -40,6 +40,7 @@
       "favicon": "./assets/images/Icono_CokoNa.png"
     },
     "plugins": [
+      
       "expo-router",
       [
         "expo-splash-screen",

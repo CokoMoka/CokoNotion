@@ -16,6 +16,7 @@ import {
   View,
 } from 'react-native';
 import { registerUser } from '../../services/auth';
+import { initDatabase } from '@/services/database';
 
 const RegisterScreen = () => {
   const [displayName, setDisplayName] = useState('');
@@ -49,7 +50,7 @@ const RegisterScreen = () => {
     setLoading(true);
     const result = await registerUser(email, password, displayName);
     setLoading(false);
-
+ await initDatabase();
     if (result.success) {
       Alert.alert('Éxito', 'Cuenta creada correctamente', [
         { 
@@ -70,7 +71,7 @@ const RegisterScreen = () => {
       <StatusBar barStyle="light-content" />
       
       <ImageBackground
-        source={require('../../assets/images/bD.jpg')}
+        source={require('../../assets/images/c.jpg')}
         style={styles.backgroundImage}
         resizeMode="cover"
       >
@@ -81,7 +82,7 @@ const RegisterScreen = () => {
           >
             <View style={styles.content}>
               <View style={styles.logoContainer}>
-                <Text style={styles.logoEmoji}>🧸</Text>
+                <Text style={styles.logoEmoji}>🦜</Text>
                 <Text style={styles.logoText}>Crear Cuenta</Text>
                 <Text style={styles.logoSubtext}>Únete a CokoNotion</Text>
               </View>
@@ -216,7 +217,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   registerButton: {
-    backgroundColor: '#df96c0',
+    backgroundColor: '#9c9c9c',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
@@ -236,7 +237,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   loginLinkBold: {
-    color: '#df96c0',
+    color: '#9c9c9c',
     fontWeight: '600',
   },
 });

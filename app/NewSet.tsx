@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
+  Image,
   ImageBackground,
   TouchableOpacity,
   Text,
@@ -17,7 +18,35 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { AppImages } from "../constants/images";
-import { FlashcardSet, Flashcard, saveFlashcardSet, loadFlashcardSet } from '../services/flashcardStorage';
+import * as ImagePicker from 'expo-image-picker';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import * as FileSystem from 'expo-file-system/legacy';
+import { 
+  FlashcardSet, 
+  Flashcard, 
+  saveFlashcardSet, 
+  loadFlashcardSet,
+} from '../services/flashcardStorage';
+
+// Función para convertir imagen a Base64 (local)
+const imageToBase64 = async (uri: string): Promise<string> => {
+  try {
+    const result = await manipulateAsync(
+      uri,
+      [{ resize: { width: 200, height: 200 } }],
+      { compress: 0.7, format: SaveFormat.JPEG }
+    );
+    
+    const base64 = await FileSystem.readAsStringAsync(result.uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    
+    return `data:image/jpeg;base64,${base64}`;
+  } catch (error) {
+    console.error('Error al convertir imagen:', error);
+    throw error;
+  }
+};
 
 export default function CreateSetScreen() {
   const { width } = useWindowDimensions();
@@ -27,7 +56,7 @@ export default function CreateSetScreen() {
   const { setId } = useLocalSearchParams();
   const router = useRouter();
 
-  // Estados con la lógica completa
+  // Estados
   const [setName, setSetName] = useState("");
   const [cards, setCards] = useState<Flashcard[]>([]);
   const [frontText, setFrontText] = useState("");
@@ -36,11 +65,15 @@ export default function CreateSetScreen() {
   const [loading, setLoading] = useState(!!setId);
   const [saving, setSaving] = useState(false);
   const [setTitle, setSetTitle] = useState(setId ? "Editar Set" : "Nuevo Set");
+  
+  // Estado para la portada
+  const [coverImage, setCoverImage] = useState<string | null>(null);
+  const [uploadingCover, setUploadingCover] = useState(false);
 
   const frontInputRef = useRef<TextInput>(null);
   const backInputRef = useRef<TextInput>(null);
 
-  // Cargar set existente si se está editando
+  // Cargar set existente
   useEffect(() => {
     if (setId) {
       cargarSet();
@@ -53,6 +86,9 @@ export default function CreateSetScreen() {
       if (set) {
         setSetName(set.name);
         setCards(set.cards);
+        if (set.coverBase64) {
+          setCoverImage(set.coverBase64);
+        }
       }
     } catch (error) {
       console.error('Error al cargar set:', error);
@@ -129,6 +165,53 @@ export default function CreateSetScreen() {
     );
   };
 
+  // Función para editar la portada
+  const handleEditCover = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permiso requerido', 'Se necesita acceso a la galería');
+        return;
+      }
+      
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+      });
+      
+      if (!result.canceled && result.assets[0]) {
+        setUploadingCover(true);
+        const imageUri = result.assets[0].uri;
+        const base64Image = await imageToBase64(imageUri);
+        
+        if (setId) {
+          // Cargar set actual, actualizar portada y guardar
+          const set = await loadFlashcardSet(setId as string);
+          if (set) {
+            set.coverBase64 = base64Image;
+            const success = await saveFlashcardSet(set);
+            if (success) {
+              setCoverImage(base64Image);
+              Alert.alert('Éxito', 'Portada actualizada correctamente');
+            } else {
+              Alert.alert('Error', 'No se pudo actualizar la portada');
+            }
+          }
+        } else {
+          setCoverImage(base64Image);
+          Alert.alert('Portada seleccionada', 'La portada se guardará al crear el set');
+        }
+        setUploadingCover(false);
+      }
+    } catch (error) {
+      console.error('Error al seleccionar imagen:', error);
+      setUploadingCover(false);
+      Alert.alert('Error', 'No se pudo seleccionar la imagen');
+    }
+  };
+
   const saveSet = async () => {
     if (!setName.trim()) {
       Alert.alert('Error', 'Ingresa un nombre para el set');
@@ -146,6 +229,7 @@ export default function CreateSetScreen() {
       name: setName.trim(),
       cards,
       createdAt: new Date().toISOString(),
+      coverBase64: coverImage || undefined,
     };
 
     const success = await saveFlashcardSet(newSet);
@@ -201,10 +285,10 @@ export default function CreateSetScreen() {
             >
               <View style={[styles.container, { paddingBottom: s(40) }]}>
 
-                {/* BANNER */}
+                {/* BANNER con portada */}
                 <View style={styles.bannerWrapper}>
                   <ImageBackground
-                    source={AppImages.ejemplo || require('../assets/images/aD.jpg')}
+                    source={coverImage ? { uri: coverImage } : AppImages.ejemplo || require('../assets/images/aD.jpg')}
                     resizeMode="cover"
                     style={[styles.banner, { height: s(120) }]}
                   />
@@ -215,10 +299,11 @@ export default function CreateSetScreen() {
                       marginBottom: s(40),
                       marginTop: s(-40)
                     }]}
-                    onPress={() => alert('Editar Portada')}
+                    onPress={handleEditCover}
+                    disabled={uploadingCover}
                   >
                     <Text style={[styles.editCoverText]}>
-                      Editar Portada
+                      {uploadingCover ? '⏳ Subiendo...' : coverImage ? '🖼️ Cambiar Portada' : '📷 Agregar Portada'}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -400,7 +485,7 @@ export default function CreateSetScreen() {
                     </Text>
                     <View style={[styles.summaryValue, { borderRadius: s(12), padding: s(12), backgroundColor: '#2a2f34' }]}>
                       <Text style={[styles.summaryText, { color: '#FFFFFF' }]}>
-                        {cards.length} Tarjeta{cards.length !== 1 ? 's' : ''} Creada{cards.length !== 1 ? 's' : ''}
+                        {cards.length} Tarjeta{cards.length !== 1 ? 's' : ''}
                       </Text>
                     </View>
                   </View>
@@ -417,7 +502,7 @@ export default function CreateSetScreen() {
                     disabled={saving}
                   >
                     <Text style={[styles.saveButtonText]}>
-                      {saving ? 'Guardando...' : 'Guardar Set'}
+                      {saving ? 'Guardando...' : '💾 Guardar Set'}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -574,7 +659,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 10,
-    width: 300,
+    width: 220,
     marginHorizontal: 'auto',
     marginTop: -63,
   },

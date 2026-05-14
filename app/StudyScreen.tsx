@@ -12,11 +12,13 @@ import {
   ActivityIndicator,
   Platform,
   Animated,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors, getFontFamily } from '../constants/theme';
-import { updateCardProgress } from '../services/flashcardStorage';
+import { updateCardProgress, loadFlashcardSet } from '../services/flashcardStorage';
+import { AppImages } from '../constants/images';
 
 interface Flashcard {
   id: string;
@@ -26,13 +28,17 @@ interface Flashcard {
 }
 
 const StudyScreen = () => {
+  const { width, height } = useWindowDimensions();
+  const s = (value: number) => value * (width / 390);
+  const v = (value: number) => value * (height / 844);
+  
   const params = useLocalSearchParams();
   const router = useRouter();
   
   const messageTimeout = useRef<NodeJS.Timeout | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const cardScale = useRef(new Animated.Value(1)).current;
   
-  // ✅ Usar el setId como parte del estado para forzar recargas
   const [setId, setSetId] = useState<string>('');
   const [setName, setSetName] = useState<string>('');
   const [cards, setCards] = useState<Flashcard[]>([]);
@@ -41,6 +47,7 @@ const StudyScreen = () => {
   const [showAnswer, setShowAnswer] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showCompleteMessage, setShowCompleteMessage] = useState(false);
+  const [localMasteredCount, setLocalMasteredCount] = useState(0);
 
   const theme = Colors.light;
   
@@ -48,7 +55,12 @@ const StudyScreen = () => {
     fontFamily: getFontFamily(Platform.OS, type),
   });
 
-  // ✅ Solo cargar cuando el componente se monta o cuando cambia el setId
+  // Actualizar contador de dominadas local
+  useEffect(() => {
+    const mastered = cards.filter(c => c.mastered).length;
+    setLocalMasteredCount(mastered);
+  }, [cards]);
+
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
@@ -79,9 +91,15 @@ const StudyScreen = () => {
     };
     
     loadData();
-  }, [params.setId]); // ✅ Solo depende de setId, no de todo params
+  }, [params.setId]);
 
-  // ✅ Función para mostrar mensaje de completado
+  const animateCard = () => {
+    Animated.sequence([
+      Animated.spring(cardScale, { toValue: 0.98, useNativeDriver: true, tension: 50, friction: 3 }),
+      Animated.spring(cardScale, { toValue: 1, useNativeDriver: true, tension: 50, friction: 3 }),
+    ]).start();
+  };
+
   const mostrarMensajeCompletado = useCallback(() => {
     if (messageTimeout.current) {
       clearTimeout(messageTimeout.current);
@@ -107,210 +125,250 @@ const StudyScreen = () => {
 
   const currentCard = cards[currentIndex];
   const remainingCards = cards.length - (currentIndex + 1);
-  const masteredCount = cards.filter(c => c.mastered).length;
+  const progress = ((currentIndex + 1) / cards.length) * 100;
+
+  const recargarSetActualizado = useCallback(async () => {
+    if (!setId) return;
+    try {
+      const setActualizado = await loadFlashcardSet(setId);
+      if (setActualizado) {
+        setCards(setActualizado.cards);
+      }
+    } catch (error) {
+      console.error('Error al recargar set:', error);
+    }
+  }, [setId]);
 
   const handleKnow = useCallback(async () => {
     if (saving || !currentCard) return;
     
     setSaving(true);
+    animateCard();
     
-    const newCards = [...cards];
-    newCards[currentIndex] = {
-      ...newCards[currentIndex],
-      mastered: true,
-    };
-    setCards(newCards);
-    
-    await updateCardProgress(setId, currentCard.id, true);
-    setSaving(false);
-    
-    if (currentIndex + 1 < cards.length) {
-      setCurrentIndex(currentIndex + 1);
-      setShowAnswer(false);
-    } else {
-      mostrarMensajeCompletado();
+    try {
+      await updateCardProgress(setId, currentCard.id, true);
       
-      setTimeout(() => {
-        Alert.alert(
-          '🎉 ¡Felicidades!',
-          `Has completado el set "${setName}".\n\nDominadas: ${masteredCount + 1}/${cards.length}`,
-          [
-            { 
-              text: 'Estudiar de nuevo', 
-              onPress: () => {
-                setCurrentIndex(0);
-                setShowAnswer(false);
+      const newCards = [...cards];
+      newCards[currentIndex] = {
+        ...newCards[currentIndex],
+        mastered: true,
+      };
+      setCards(newCards);
+      
+      const isLastCard = currentIndex + 1 >= cards.length;
+      
+      if (!isLastCard) {
+        setCurrentIndex(currentIndex + 1);
+        setShowAnswer(false);
+      } else {
+        const nuevasDominadas = cards.filter(c => c.mastered).length + 1;
+        const totalCards = cards.length;
+        
+        mostrarMensajeCompletado();
+        
+        setTimeout(() => {
+          Alert.alert(
+            '🎉 ¡Felicidades!',
+            `Has completado el set "${setName}".\n\nDominadas: ${nuevasDominadas}/${totalCards}`,
+            [
+              { 
+                text: 'Estudiar de nuevo', 
+                onPress: () => {
+                  recargarSetActualizado().then(() => {
+                    setCurrentIndex(0);
+                    setShowAnswer(false);
+                  });
+                }
+              },
+              { 
+                text: 'Volver', 
+                onPress: () => router.back() 
               }
-            },
-            { 
-              text: 'Volver', 
-              onPress: () => router.back() 
-            }
-          ]
-        );
-      }, 500);
+            ]
+          );
+        }, 500);
+      }
+    } catch (error) {
+      console.error('Error al guardar progreso:', error);
+      Alert.alert('Error', 'No se pudo guardar el progreso');
+    } finally {
+      setSaving(false);
     }
-  }, [saving, currentCard, cards, currentIndex, setId, setName, masteredCount, router, mostrarMensajeCompletado]);
+  }, [saving, currentCard, cards, currentIndex, setId, setName, router, mostrarMensajeCompletado, recargarSetActualizado, animateCard]);
 
   const handleDontKnow = useCallback(async () => {
     if (saving || !currentCard) return;
     
     setSaving(true);
+    animateCard();
     
-    const newCards = [...cards];
-    newCards[currentIndex] = {
-      ...newCards[currentIndex],
-      mastered: false,
-    };
-    setCards(newCards);
-    
-    await updateCardProgress(setId, currentCard.id, false);
-    setSaving(false);
-    
-    if (currentIndex + 1 < cards.length) {
-      setCurrentIndex(currentIndex + 1);
-      setShowAnswer(false);
-    } else {
-      mostrarMensajeCompletado();
+    try {
+      await updateCardProgress(setId, currentCard.id, false);
       
-      setTimeout(() => {
-        Alert.alert(
-          '📚 Sesión completada',
-          `Has repasado todas las tarjetas del set "${setName}".\n\nDominadas: ${cards.filter(c => c.mastered).length}/${cards.length}`,
-          [
-            { 
-              text: 'Repasar de nuevo', 
-              onPress: () => {
-                setCurrentIndex(0);
-                setShowAnswer(false);
+      const newCards = [...cards];
+      newCards[currentIndex] = {
+        ...newCards[currentIndex],
+        mastered: false,
+      };
+      setCards(newCards);
+      
+      const isLastCard = currentIndex + 1 >= cards.length;
+      
+      if (!isLastCard) {
+        setCurrentIndex(currentIndex + 1);
+        setShowAnswer(false);
+      } else {
+        const masteredCountNow = cards.filter(c => c.mastered).length;
+        const totalCards = cards.length;
+        
+        mostrarMensajeCompletado();
+        
+        setTimeout(() => {
+          Alert.alert(
+            '📚 Sesión completada',
+            `Has repasado todas las tarjetas del set "${setName}".\n\nDominadas: ${masteredCountNow}/${totalCards}`,
+            [
+              { 
+                text: 'Repasar de nuevo', 
+                onPress: () => {
+                  recargarSetActualizado().then(() => {
+                    setCurrentIndex(0);
+                    setShowAnswer(false);
+                  });
+                }
+              },
+              { 
+                text: 'Volver', 
+                onPress: () => router.back() 
               }
-            },
-            { 
-              text: 'Volver', 
-              onPress: () => router.back() 
-            }
-          ]
-        );
-      }, 500);
+            ]
+          );
+        }, 500);
+      }
+    } catch (error) {
+      console.error('Error al guardar progreso:', error);
+      Alert.alert('Error', 'No se pudo guardar el progreso');
+    } finally {
+      setSaving(false);
     }
-  }, [saving, currentCard, cards, currentIndex, setId, setName, router, mostrarMensajeCompletado]);
+  }, [saving, currentCard, cards, currentIndex, setId, setName, router, mostrarMensajeCompletado, recargarSetActualizado, animateCard]);
 
   if (loading) {
     return (
-      <SafeAreaProvider>
+      <View style={styles.mainContainer}>
         <ImageBackground
-          source={require('../assets/images/bD.jpg')}
-          style={styles.backgroundImage}
+          source={AppImages.backgroundImg || require('../assets/images/bD.jpg')}
+          style={styles.fullScreenBackground}
           resizeMode="cover"
         >
           <View style={styles.overlay}>
             <SafeAreaView style={styles.safeArea}>
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={theme.bearPrimary} />
-                <Text style={[styles.loadingText, { color: theme.textSecondary }]}>
-                  Cargando tarjetas...
-                </Text>
+                <ActivityIndicator size="large" color="#df96c0" />
+                <Text style={styles.loadingText}>Cargando tarjetas...</Text>
               </View>
             </SafeAreaView>
           </View>
         </ImageBackground>
-      </SafeAreaProvider>
+      </View>
     );
   }
 
   if (!currentCard) {
     return (
-      <SafeAreaProvider>
+      <View style={styles.mainContainer}>
         <ImageBackground
-          source={require('../assets/images/bD.jpg')}
-          style={styles.backgroundImage}
+          source={AppImages.backgroundImg || require('../assets/images/bD.jpg')}
+          style={styles.fullScreenBackground}
           resizeMode="cover"
         >
           <View style={styles.overlay}>
             <SafeAreaView style={styles.safeArea}>
               <View style={styles.errorContainer}>
-                <Text style={[styles.errorText, { color: theme.textSecondary }]}>
-                  No hay tarjetas para estudiar
-                </Text>
+                <Text style={styles.errorText}>No hay tarjetas para estudiar</Text>
                 <TouchableOpacity onPress={() => router.back()}>
-                  <Text style={[styles.backButtonText, { color: theme.bearPrimary }]}>
-                    ← Volver
-                  </Text>
+                  <Text style={styles.backButtonText}>← Volver</Text>
                 </TouchableOpacity>
               </View>
             </SafeAreaView>
           </View>
         </ImageBackground>
-      </SafeAreaProvider>
+      </View>
     );
   }
 
   return (
-    <SafeAreaProvider>
+    <View style={styles.mainContainer}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" />
+      
       <ImageBackground
-        source={require('../assets/images/bD.jpg')}
-        style={styles.backgroundImage}
+        source={AppImages.backgroundImg || require('../assets/images/bD.jpg')}
+        style={styles.fullScreenBackground}
         resizeMode="cover"
       >
         <View style={styles.overlay}>
           <SafeAreaView style={styles.safeArea}>
-            <StatusBar barStyle="light-content" backgroundColor="transparent" />
             
             {showCompleteMessage && (
               <Animated.View style={[styles.completeMessage, { opacity: fadeAnim }]}>
-                <Text style={[styles.completeMessageText, { color: '#ffffff' }, font('rounded')]}>
-                  🎉 ¡Has completado todas las tarjetas! 🎉
+                <Text style={styles.completeMessageText}>
+                  ¡Has completado todas las tarjetas!
                 </Text>
               </Animated.View>
             )}
             
-            <View style={styles.container}>
+            <View style={[styles.container, { paddingHorizontal: s(20), paddingVertical: v(20) }]}>
+              
+              {/* Header */}
               <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()}>
-                  <Text style={[styles.backIcon, { color: theme.text }]}>←</Text>
+                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                  <Text style={styles.backIcon}>←</Text>
                 </TouchableOpacity>
-                <Text style={[styles.setName, { color: theme.text }, font('rounded')]} numberOfLines={1}>
+                <Text style={[styles.setName, font('rounded')]} numberOfLines={1}>
                   {setName}
                 </Text>
-                <Text style={[styles.progress, { color: theme.textSecondary }, font('sans')]}>
-                  {currentIndex + 1}/{cards.length}
+                <View style={styles.placeholder} />
+              </View>
+
+              {/* Barra de progreso */}
+              <View style={styles.progressSection}>
+                <View style={styles.progressBarContainer}>
+                  <View style={[styles.progressBar, { width: `${progress}%`, backgroundColor: '#df96c0' }]} />
+                </View>
+                <Text style={styles.progressText}>
+                  Tarjeta {currentIndex + 1} de {cards.length}
                 </Text>
               </View>
 
-              <View style={styles.statsHeader}>
-                <View style={styles.statItem}>
-                  <Text style={[styles.statValue, { color: theme.bearPrimary }, font('rounded')]}>
-                    {masteredCount}
-                  </Text>
-                  <Text style={[styles.statLabel, { color: theme.textMuted }, font('sans')]}>
-                    Dominadas
-                  </Text>
+              {/* Stats */}
+              <View style={styles.statsRow}>
+                <View style={styles.statCard}>
+                  <Text style={[styles.statValue, { color: '#df96c0' }]}>{localMasteredCount}</Text>
+                  <Text style={styles.statLabel}>Dominadas</Text>
                 </View>
-                <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
-                <View style={styles.statItem}>
-                  <Text style={[styles.statValue, { color: theme.textSecondary }, font('rounded')]}>
-                    {remainingCards}
-                  </Text>
-                  <Text style={[styles.statLabel, { color: theme.textMuted }, font('sans')]}>
-                    Restantes
-                  </Text>
+                <View style={styles.statDivider} />
+                <View style={styles.statCard}>
+                  <Text style={[styles.statValue, { color: '#b5b5b5' }]}>{remainingCards}</Text>
+                  <Text style={styles.statLabel}>Restantes</Text>
                 </View>
               </View>
 
-              <View style={styles.cardContainer}>
-                <View style={[styles.card, { backgroundColor: theme.background, borderColor: theme.border }]}>
-                  <Text style={[styles.cardText, { color: theme.text }, font('rounded')]}>
+              {/* Tarjeta */}
+              <Animated.View style={[styles.cardContainer, { transform: [{ scale: cardScale }] }]}>
+                <View style={[styles.card, { backgroundColor: '#2a2f34', borderColor: '#343a40' }]}>
+                  <Text style={[styles.cardText, { color: '#FFFFFF' }, font('rounded')]}>
                     {showAnswer ? currentCard.back : currentCard.front}
                   </Text>
                 </View>
-              </View>
+              </Animated.View>
 
+              {/* Botones */}
               {!showAnswer ? (
                 <TouchableOpacity
-                  style={[styles.showAnswerButton, { backgroundColor: theme.bearPrimary }]}
+                  style={[styles.showAnswerButton, { backgroundColor: '#df96c0' }]}
                   onPress={() => setShowAnswer(true)}
                 >
-                  <Text style={[styles.buttonText, { color: '#ffffff' }, font('rounded')]}>
+                  <Text style={[styles.buttonText, { color: '#FFFFFF' }, font('rounded')]}>
                     Mostrar respuesta
                   </Text>
                 </TouchableOpacity>
@@ -330,7 +388,7 @@ const StudyScreen = () => {
                     onPress={handleKnow}
                     disabled={saving}
                   >
-                    <Text style={[styles.buttonText, { color: '#ffffff' }, font('rounded')]}>
+                    <Text style={[styles.buttonText, { color: '#FFFFFF' }, font('rounded')]}>
                       {saving ? 'Guardando...' : 'Lo sabía ✓'}
                     </Text>
                   </TouchableOpacity>
@@ -340,26 +398,28 @@ const StudyScreen = () => {
           </SafeAreaView>
         </View>
       </ImageBackground>
-    </SafeAreaProvider>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  backgroundImage: {
+  mainContainer: {
+    flex: 1,
+  },
+  fullScreenBackground: {
     flex: 1,
     width: '100%',
     height: '100%',
   },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
   safeArea: {
     flex: 1,
   },
   container: {
     flex: 1,
-    padding: 20,
   },
   loadingContainer: {
     flex: 1,
@@ -369,6 +429,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 14,
+    color: '#FFFFFF',
   },
   errorContainer: {
     flex: 1,
@@ -377,54 +438,84 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
+    color: '#FFFFFF',
     marginBottom: 16,
   },
   backButtonText: {
     fontSize: 16,
-    fontWeight: '500',
+    color: '#df96c0',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 20,
-    marginTop: 20,
+    marginTop: 10,
+  },
+  backButton: {
+    padding: 8,
   },
   backIcon: {
     fontSize: 28,
-    fontWeight: '300',
+    color: '#FFFFFF',
   },
   setName: {
     fontSize: 18,
     fontWeight: '600',
+    color: '#FFFFFF',
     flex: 1,
     textAlign: 'center',
   },
-  progress: {
-    fontSize: 14,
+  placeholder: {
+    width: 40,
   },
-  statsHeader: {
+  progressSection: {
+    marginBottom: 20,
+  },
+  progressBarContainer: {
+    height: 6,
+    backgroundColor: '#343a40',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressBar: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  progressText: {
+    fontSize: 12,
+    color: '#b5b5b5',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
     marginBottom: 30,
-    paddingVertical: 10,
+    paddingVertical: 12,
+    backgroundColor: '#2a2f34',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#343a40',
   },
-  statItem: {
+  statCard: {
     alignItems: 'center',
     flex: 1,
   },
   statValue: {
     fontSize: 28,
-    fontWeight: '600',
+    fontWeight: 'bold',
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 12,
+    color: '#b5b5b5',
   },
   statDivider: {
     width: 1,
     height: 40,
+    backgroundColor: '#343a40',
   },
   cardContainer: {
     flex: 1,
@@ -497,6 +588,7 @@ const styles = StyleSheet.create({
   completeMessageText: {
     fontSize: 14,
     fontWeight: '600',
+    color: '#FFFFFF',
   },
 });
 

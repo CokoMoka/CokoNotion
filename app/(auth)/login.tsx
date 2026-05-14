@@ -46,7 +46,7 @@ const LoginScreen = () => {
       <StatusBar barStyle="light-content" />
       
       <ImageBackground
-        source={require('../../assets/images/bD.jpg')}
+        source={require('../../assets/images/c.jpg')}
         style={styles.backgroundImage}
         resizeMode="cover"
       >
@@ -58,7 +58,7 @@ const LoginScreen = () => {
             <View style={styles.content}>
               {/* Logo */}
               <View style={styles.logoContainer}>
-                <Text style={styles.logoEmoji}>🧸</Text>
+                <Text style={styles.logoEmoji}>🙊</Text>
                 <Text style={styles.logoText}>CokoNotion</Text>
                 <Text style={styles.logoSubtext}>Organiza tu estudio, mejora tu disciplina</Text>
               </View>
@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   loginButton: {
-    backgroundColor: '#df96c0',
+    backgroundColor: '#8c8c8c',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
@@ -199,15 +199,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   registerLinkBold: {
-    color: '#df96c0',
+    color: '#b5b5b5',
     fontWeight: '600',
   },
   forgotText: {
     color: '#999',
     fontSize: 12,
     textAlign: 'center',
-    marginTop: 12,
-  },
+      marginTop: 12,
+    },
 });
 
 export default LoginScreen;

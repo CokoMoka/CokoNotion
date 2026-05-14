@@ -1,5 +1,5 @@
 // app/(tabs)/FlashCards.tsx
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Image,
@@ -10,6 +10,9 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  ImageBackground,
+  StatusBar,
+  RefreshControl,
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { 
@@ -19,31 +22,100 @@ import {
   exportFlashcardSet,
 } from '../../services/flashcardStorage';
 import * as Sharing from 'expo-sharing';
+import { getUserAvatar, getUserBanner, getUserBackground } from "../../services/avatarService";
+import { useUser } from "../../hooks/useUser";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { AppImages } from "@/constants/images";
 
 const { width, height } = Dimensions.get("window");
 
 const FlashcardsScreen = () => {
   const [sets, setSets] = useState<FlashcardSet[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false); // 🔥 NUEVO: estado para refresh
   const router = useRouter();
 
-  const cargarSets = async () => {
-    setLoading(true);
+  // Estados para imágenes del usuario
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [bannerUrl, setBannerUrl] = useState<string | null>(null);
+  const [backgroundUrl, setBackgroundUrl] = useState<string | null>(null);
+  const [loadingImages, setLoadingImages] = useState(true);
+
+  const { user, loading: userLoading } = useUser();
+
+  // 🔥 NUEVO: Función para cargar sets (puede ser llamada con refresh)
+  const cargarSets = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       const loadedSets = await loadAllFlashcardSets();
       setSets(loadedSets);
     } catch (error) {
       console.error('Error al cargar sets:', error);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
+
+    const cargarImagenesUsuario = useCallback(async () => {
+      if (!user?.uid) return;
+      
+      try {
+        const [avatar, banner, background] = await Promise.all([
+          getUserAvatar(user.uid),
+          getUserBanner(user.uid),
+          getUserBackground(user.uid),
+        ]);
+        
+        setAvatarUrl(avatar);
+        setBannerUrl(banner);
+        setBackgroundUrl(background);
+      } catch (error) {
+        console.error('Error al cargar imágenes:', error);
+      }
+    }, [user?.uid]);
+
+  // 🔥 NUEVO: Función para refrescar (pull-to-refresh)
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await cargarSets(false);
+    await Promise.all([cargarImagenesUsuario()]);
+    setRefreshing(false);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       cargarSets();
     }, [])
   );
+
+  // Cargar imágenes del usuario
+  useEffect(() => {
+    if (user?.uid) {
+      cargarImagenes();
+      cargarImagenesUsuario();
+    }
+  }, [user]);
+
+  const cargarImagenes = async () => {
+    if (!user?.uid) return;
+    setLoadingImages(true);
+    
+    try {
+      const [avatar, banner, background] = await Promise.all([
+        getUserAvatar(user.uid),
+        getUserBanner(user.uid),
+        getUserBackground(user.uid),
+      ]);
+      
+      setAvatarUrl(avatar);
+      setBannerUrl(banner);
+      setBackgroundUrl(background);
+    } catch (error) {
+      console.error('Error al cargar imágenes:', error);
+    } finally {
+      setLoadingImages(false);
+    }
+  };
 
   // Estadísticas dinámicas
   const totalCards = sets.reduce((acc, set) => acc + set.cards.length, 0);
@@ -86,7 +158,7 @@ const FlashcardsScreen = () => {
           style: 'destructive',
           onPress: async () => {
             await deleteFlashcardSet(set.id);
-            cargarSets();
+            cargarSets(); // Recargar después de eliminar
           },
         },
       ]
@@ -106,141 +178,194 @@ const FlashcardsScreen = () => {
     router.push('/NewSet');
   };
 
-  // Imagen por defecto si no hay imagen personalizada
   const getSetImage = (set: FlashcardSet) => {
-    // Aquí puedes personalizar según el set.id o set.name
-    // Por ahora usamos imágenes predeterminadas basadas en el índice
+    if (set.coverBase64) {
+      return { uri: set.coverBase64 };
+    }
     const images = [
-      require("../../assets/images/cutean.jpg"),
-      require("../../assets/images/disk.jpg"),
-      require("../../assets/images/cutean.jpg"),
-      require("../../assets/images/disk.jpg"),
+      require("../../assets/images/Carpeta.png"),
+      require("../../assets/images/Carpeta.png"),
     ];
     return images[Math.abs(set.id?.length || 0) % images.length];
   };
 
+  if (userLoading || loadingImages) {
+    return (
+      <View style={styles.mainContainer}>
+        <ImageBackground
+          source={backgroundUrl ? { uri: backgroundUrl } : AppImages.backgroundImg}
+          style={styles.fullScreenBackground}
+          resizeMode="cover"
+        >
+          <View style={styles.overlay}>
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#df96c0" />
+              <Text style={styles.loadingText}>Cargando...</Text>
+            </View>
+          </View>
+        </ImageBackground>
+      </View>
+    );
+  }
+
   return (
-    <View style={styles.container}>
-      <ScrollView 
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+    <View style={styles.mainContainer}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" />
+      
+      <ImageBackground 
+        source={backgroundUrl ? { uri: backgroundUrl } : AppImages.backgroundImg }
+        style={styles.fullScreenBackground}
+        resizeMode="cover"
       >
-        <View style={styles.content}>
-          
-          {/* Header con título */}
-          <View style={styles.header}>
-            <Image
-              source={require("../../assets/images/icon.jpg")}
-              resizeMode="contain"
-              style={styles.headerImage}
-            />
-            <Text style={styles.headerTitle}>FlashCards</Text>
-            <TouchableOpacity 
-              style={styles.addButton}
-              onPress={handleCreateNew}
+        <View style={styles.overlay}>
+            <ScrollView 
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.scrollContent}
+              // 🔥 NUEVO: RefreshControl para pull-to-refresh
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  colors={['#df96c0']}
+                  tintColor="#df96c0"
+                  title="Actualizando..."
+                  titleColor="#ffffff"
+                  progressBackgroundColor="rgba(0,0,0,0.3)"
+                />
+              }
             >
-              <Text style={styles.addButtonText}>+</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Grid de flashcards - 2 columnas */}
-          {loading ? (
-            <ActivityIndicator size="large" color="#df96c0" style={styles.loader} />
-          ) : sets.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No hay sets de flashcards</Text>
-              <Text style={styles.emptySubtext}>Presiona + para crear uno</Text>
-            </View>
-          ) : (
-            <View style={styles.gridContainer}>
-              {sets.map((item, index) => {
-                const masteredCount = item.cards.filter(c => c.mastered).length;
-                const progress = item.cards.length > 0 ? Math.round((masteredCount / item.cards.length) * 100) : 0;
+              <View style={styles.content}>
                 
-                return (
-                  <TouchableOpacity 
-                    key={item.id} 
-                    style={styles.cardContainer}
-                    onPress={() => handleStudy(item)}
-                    activeOpacity={0.7}
-                  >
+                {/* Header con avatar y título */}
+                <View style={styles.header}>
+                  {avatarUrl ? (
                     <Image
-                      source={getSetImage(item)}
+                      source={{ uri: avatarUrl }}
                       resizeMode="cover"
-                      style={styles.cardImage}
+                      style={styles.headerImage}
                     />
-                    {/* Barra de progreso */}
-                    <View style={styles.progressBarContainer}>
-                      <View 
-                        style={[
-                          styles.progressBar, 
-                          { width: `${progress}%`, backgroundColor: progress === 100 ? '#4CAF50' : '#df96c0' }
-                        ]} 
-                      />
-                    </View>
-                    <View style={styles.cardFooter}>
-                      <View style={styles.cardHeaderRow}>
-                        <Text style={styles.cardTitle} numberOfLines={1}>
-                          {item.name}
-                        </Text>
-                        <View style={styles.actionButtons}>
-                          {/* Botón Editar */}
-                          <TouchableOpacity 
-                            style={styles.actionButton}
-                            onPress={() => handleEdit(item)}
-                          >
-                            <Text style={styles.actionButtonText}>✎</Text>
-                          </TouchableOpacity>
-                          
-                          {/* Botón Eliminar */}
-                          <TouchableOpacity 
-                            style={styles.actionButton}
-                            onPress={() => handleDelete(item)}
-                          >
-                            <Text style={styles.actionButtonText}>✗</Text>
-                          </TouchableOpacity>
-                          
-                          {/* Botón Exportar */}
-                          <TouchableOpacity 
-                            style={styles.actionButton}
-                            onPress={() => handleExport(item)}
-                          >
-                            <Text style={styles.actionButtonText}>➜</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                      <View style={styles.cardStats}>
-                        <Text style={styles.cardStatsText}>
-                          {item.cards.length} tarjetas • {masteredCount} dominadas
-                        </Text>
-                      </View>
-                    </View>
+                  ) : (
+                    <Image
+                      source={AppImages.icon}
+                      resizeMode="contain"
+                      style={styles.headerImage}
+                    />
+                  )}
+                  <Text style={styles.headerTitle}>FlashCards</Text>
+                  <TouchableOpacity 
+                    style={styles.addButton}
+                    onPress={handleCreateNew}
+                  >
+                    <Text style={styles.addButtonText}>+</Text>
                   </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
+                </View>
 
-          {/* Stats footer */}
-          <View style={styles.statsContainer}>
-            {stats.map((stat, index) => (
-              <View key={index} style={styles.statItem}>
-                <Text style={styles.statValue}>{stat.value}</Text>
-                <Text style={styles.statLabel}>{stat.label}</Text>
+                {/* Grid de flashcards - 2 columnas */}
+                {loading ? (
+                  <ActivityIndicator size="large" color="#df96c0" style={styles.loader} />
+                ) : sets.length === 0 ? (
+                  <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyText}>No hay sets de flashcards</Text>
+                    <Text style={styles.emptySubtext}>Presiona + para crear uno</Text>
+                  </View>
+                ) : (
+                  <View style={styles.gridContainer}>
+                    {sets.map((item, index) => {
+                      const masteredCount = item.cards.filter(c => c.mastered).length;
+                      const progress = item.cards.length > 0 ? Math.round((masteredCount / item.cards.length) * 100) : 0;
+                      
+                      return (
+                        <TouchableOpacity 
+                          key={item.id} 
+                          style={styles.cardContainer}
+                          onPress={() => handleStudy(item)}
+                          activeOpacity={0.7}
+                        >
+                          <Image
+                            source={getSetImage(item)}
+                            resizeMode="cover"
+                            style={styles.cardImage}
+                          />
+                          {/* Barra de progreso (opcional - descomentar si quieres) */}
+                          {/* <View style={styles.progressBarContainer}>
+                            <View 
+                              style={[
+                                styles.progressBar, 
+                                { width: `${progress}%`, backgroundColor: progress === 100 ? '#4CAF50' : '#df96c0' }
+                              ]} 
+                            />
+                          </View> */}
+                          <View style={styles.cardFooter}>
+                            <View style={styles.cardHeaderRow}>
+                              <Text style={styles.cardTitle} numberOfLines={1}>
+                                {item.name}
+                              </Text>
+                              <View style={styles.actionButtons}>
+                                <TouchableOpacity 
+                                  style={styles.actionButton}
+                                  onPress={() => handleEdit(item)}
+                                >
+                                  <Text style={styles.actionButtonText}>✎</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity 
+                                  style={styles.actionButton}
+                                  onPress={() => handleDelete(item)}
+                                >
+                                  <Text style={styles.actionButtonText}>✗</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity 
+                                  style={styles.actionButton}
+                                  onPress={() => handleExport(item)}
+                                >
+                                  <Text style={styles.actionButtonText}>➜</Text>
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                            <View style={styles.cardStats}>
+                              <Text style={styles.cardStatsText}>
+                                {item.cards.length} tarjetas • {masteredCount} dominadas
+                              </Text>
+                            </View>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+
+                {/* Stats footer */}
+                <View style={styles.statsContainer}>
+                  {stats.map((stat, index) => (
+                    <View key={index} style={styles.statItem}>
+                      <Text style={styles.statValue}>{stat.value}</Text>
+                      <Text style={styles.statLabel}>{stat.label}</Text>
+                    </View>
+                  ))}
+                </View>
+                
               </View>
-            ))}
-          </View>
-          
+            </ScrollView>
         </View>
-      </ScrollView>
+      </ImageBackground>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  mainContainer: {
     flex: 1,
-    backgroundColor: "#1C1C1C",
+  },
+  fullScreenBackground: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+  },
+  safeArea: {
+    flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
@@ -249,6 +374,16 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingTop: height * 0.02,
     paddingBottom: height * 0.02,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#FFFFFF',
   },
   // Header
   header: {
@@ -263,6 +398,7 @@ const styles = StyleSheet.create({
     height: width * 0.12,
     marginRight: width * 0.02,
     borderRadius: width * 0.06,
+
   },
   headerTitle: {
     color: "#FFFFFF",
@@ -310,17 +446,15 @@ const styles = StyleSheet.create({
     borderRadius: width * 0.03,
     overflow: "hidden",
     padding: width * 0.01,
-    backgroundColor: "#2a2f34",
   },
   cardImage: {
     width: "100%",
     height: width * 0.37,
-    backgroundColor: "#000000",
     borderRadius: width * 0.02,
   },
   progressBarContainer: {
     height: 4,
-    backgroundColor: '#343a40',
+    backgroundColor: '#838383',
     marginTop: 6,
     borderRadius: 2,
   },
@@ -359,7 +493,7 @@ const styles = StyleSheet.create({
   },
   cardStatsText: {
     color: "#8E8E8E",
-    fontSize: width * 0.025,
+    fontSize: width * 0.030,
   },
   // Stats footer
   statsContainer: {
@@ -368,8 +502,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: height * 0.02,
     marginTop: height * 0.01,
-    borderTopWidth: 1,
-    borderTopColor: "#3D3D3D",
+    borderTopWidth: 4,
+    borderTopColor: "#a1a1a1",
     marginHorizontal: width * 0.04,
   },
   statItem: {
@@ -383,8 +517,8 @@ const styles = StyleSheet.create({
     marginBottom: height * 0.003,
   },
   statLabel: {
-    color: "#8E8E8E",
-    fontSize: width * 0.025,
+    color: "#b6b6b6",
+    fontSize: width * 0.03,
     fontWeight: "bold",
   },
 });
