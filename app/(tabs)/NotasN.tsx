@@ -1,25 +1,23 @@
-// app/(tabs)/Notas.tsx
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  View,
-  Image,
+  ActivityIndicator,
+  Alert,
+  ImageBackground,
+  PanResponder,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
   Text,
   TextInput,
-  ImageBackground,
-  ScrollView,
-  useWindowDimensions,
-  StyleSheet,
-  StatusBar,
   TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-  PanResponder,
+  useWindowDimensions,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AppImages } from "../../constants/images";
-import { getAllNotes, getNotesByType, initDatabase, Note, deleteNote, updateNote } from '../../services/database';
 import { useUser } from '../../hooks/useUser';
+import { deleteNote, getAllNotes, getNotesByType, initDatabase, Note } from '../../services/database';
 
 export default function NotasScreen() {
   const { width, height } = useWindowDimensions();

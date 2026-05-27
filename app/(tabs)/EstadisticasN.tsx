@@ -1,26 +1,22 @@
-// app/(tabs)/Logros.tsx
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
-  View,
-  Image,
-  Text,
-  TextInput,
-  ImageBackground,
-  ScrollView,
-  useWindowDimensions,
-  StyleSheet,
-  StatusBar,
-  TouchableOpacity,
   ActivityIndicator,
+  Image,
+  ImageBackground,
   RefreshControl,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useUser } from "../../hooks/useUser";
-import { AppImages } from "../../constants/images";
-import { getUserAvatar, getUserBanner, getUserBackground } from "../../services/avatarService";
-import { loadAllFlashcardSets } from "../../services/flashcardStorage";
-import { getAllNotes } from "../../services/database";
 import { BarChart, LineChart, PieChart } from "react-native-gifted-charts";
+import { AppImages } from "../../constants/images";
+import { useUser } from "../../hooks/useUser";
+import { getUserAvatar, getUserBackground, getUserBanner } from "../../services/avatarService";
+import { getAllNotes } from "../../services/database";
+import { loadAllFlashcardSets } from "../../services/flashcardStorage";
 
 export default function LogrosScreen() {
   const { width, height } = useWindowDimensions();

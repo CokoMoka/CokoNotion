@@ -33,14 +33,14 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.liobur.CokoNotion"
     },
     "web": {
       "output": "static",
       "favicon": "./assets/images/Icono_CokoNa.png"
     },
     "plugins": [
-      
       "expo-router",
       [
         "expo-splash-screen",
@@ -60,6 +60,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "865576e2-dfbd-4151-b913-cf604e8e1095"
+      }
     }
   }
 }

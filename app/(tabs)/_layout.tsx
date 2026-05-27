@@ -1,8 +1,7 @@
-// app/(tabs)/_layout.tsx
+import { Feather, FontAwesome5, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import { Ionicons, MaterialIcons, FontAwesome5, Feather } from '@expo/vector-icons';
-import { Platform, Animated } from 'react-native';
-import { useRef, useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { Animated, Platform } from 'react-native';
 
 // Componente para icono animado
 const AnimatedIcon = ({ 
@@ -80,7 +79,6 @@ export default function TabsLayout() {
           ),
         }}
       />
-
       {/* NOTAS */}
       <Tabs.Screen
         name="NotasN"
@@ -91,7 +89,6 @@ export default function TabsLayout() {
           ),
         }}
       />
-
       {/* FLASHCARDS */}
       <Tabs.Screen
         name="FeedFlashCards"
@@ -102,7 +99,6 @@ export default function TabsLayout() {
           ),
         }}
       />
-
       {/* TEMPORIZADOR */}
       <Tabs.Screen
         name="PomSetup"
@@ -113,7 +109,6 @@ export default function TabsLayout() {
           ),
         }}
       />
-
       {/* ESTADÍSTICAS */}
       <Tabs.Screen
         name="EstadisticasN"
@@ -124,7 +119,6 @@ export default function TabsLayout() {
           ),
         }}
       />
-
       {/* MAPA */}
       <Tabs.Screen
         name="Mapa"
@@ -135,7 +129,6 @@ export default function TabsLayout() {
           ),
         }}
       />
-
       {/* PERFIL */}
       <Tabs.Screen
         name="ProfileN"
@@ -146,7 +139,6 @@ export default function TabsLayout() {
           ),
         }}
       />
-
       {/* ========== PANTALLAS OCULTAS ========== */}
       <Tabs.Screen name="NuevaNota" options={{ href: null, tabBarIcon: () => null }} />
       <Tabs.Screen name="NotaEj" options={{ href: null, tabBarIcon: () => null }} />

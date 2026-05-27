@@ -1,4 +1,4 @@
-// app/(auth)/register.tsx
+import { initDatabase } from '@/services/database';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
@@ -16,7 +16,6 @@ import {
   View,
 } from 'react-native';
 import { registerUser } from '../../services/auth';
-import { initDatabase } from '@/services/database';
 
 const RegisterScreen = () => {
   const [displayName, setDisplayName] = useState('');
@@ -56,7 +55,6 @@ const RegisterScreen = () => {
         { 
           text: 'OK', 
           onPress: () => {
-            // ✅ Navegar a la pantalla Main dentro de tabs
             router.replace('/(tabs)/Main');
           } 
         }

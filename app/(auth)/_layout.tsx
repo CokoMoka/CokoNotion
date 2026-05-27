@@ -1,4 +1,3 @@
-// app/(auth)/_layout.tsx
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect, useState } from 'react';
@@ -19,7 +18,7 @@ export default function AuthLayout() {
   }, []);
 
   if (!isAppReady) {
-    return null; // O puedes poner un splash screen simple
+    return null; 
   }
 
   return (

@@ -1,38 +1,33 @@
-// app/(tabs)/Mapa.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import { AppImages } from '@/constants/images';
+import * as Location from 'expo-location';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
+  ActivityIndicator,
+  Alert,
   Dimensions,
-  TouchableOpacity,
   ImageBackground,
+  Platform,
   SafeAreaView,
   StatusBar,
-  ActivityIndicator,
-  Platform,
-  Modal,
-  TextInput,
-  ScrollView,
-  Alert,
-  RefreshControl,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import * as Location from 'expo-location';
-import { useFocusEffect, useRouter } from 'expo-router';
 import { Colors, getFontFamily } from '../../constants/theme';
-import { 
-  StudyPoint, 
-  getStudyPoints, 
-  saveStudyPoint, 
-  deleteStudyPoint, 
-  updateStudyPoint,
-  initStudyPointsTable 
-} from '../../services/database';
-import { AppImages } from '@/constants/images';
 import { useCompass } from '../../hooks/useCompass';
-import  { useRef } from 'react';
+import {
+  StudyPoint,
+  deleteStudyPoint,
+  getStudyPoints,
+  initStudyPointsTable,
+  saveStudyPoint,
+  updateStudyPoint
+} from '../../services/database';
+
 
 const { width, height } = Dimensions.get("window");
 
@@ -576,7 +571,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
-  // Modales (agrega los estilos de tus modales aquí)
 });
 
 export default MapScreen;

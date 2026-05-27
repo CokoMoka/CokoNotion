@@ -1,5 +1,4 @@
-// app/contexts/UserContext.tsx
-import React, { createContext, useContext, ReactNode } from 'react';
+import React, { createContext, ReactNode, useContext } from 'react';
 import { useUser } from '../../hooks/useUser';
 import { UserData } from '../../services/auth';
 

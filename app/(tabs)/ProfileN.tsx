@@ -1,29 +1,26 @@
-// app/(tabs)/Perfil.tsx
-import React, { useState, useEffect, useCallback } from "react";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
 import {
-  View,
-  Image,
-  Text,
-  TextInput,
-  ImageBackground,
-  ScrollView,
-  useWindowDimensions,
-  StyleSheet,
-  StatusBar,
-  TouchableOpacity,
-  Switch,
   ActivityIndicator,
   Alert,
+  Image,
+  ImageBackground,
   Modal,
   RefreshControl,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useUser } from "../../hooks/useUser";
 import { AppImages } from "../../constants/images";
-import { getUserAvatar, getUserBanner, getUserBackground } from "../../services/avatarService";
-import { updateUserPhrase, getUserPhrase, updateUserProfile, logoutUser, deleteCurrentAccount, reauthenticateUser } from "../../services/auth";
-import { router } from "expo-router";
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useUser } from "../../hooks/useUser";
+import { deleteCurrentAccount, getUserPhrase, logoutUser, updateUserPhrase, updateUserProfile } from "../../services/auth";
+import { getUserAvatar, getUserBackground, getUserBanner } from "../../services/avatarService";
 
 export default function PerfilScreen() {
   const { width, height } = useWindowDimensions();

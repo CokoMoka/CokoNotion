@@ -1,24 +1,23 @@
-// app/(tabs)/NewFlashcardSet.tsx
-import React, { useState, useEffect, useRef } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  View,
+  ActivityIndicator,
+  Alert,
+  ImageBackground,
+  Keyboard,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  ImageBackground,
-  SafeAreaView,
-  StatusBar,
-  ScrollView,
-  Alert,
-  ActivityIndicator,
-  Platform,
-  Keyboard,
+  View,
 } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors, getFontFamily } from '../constants/theme';
-import { FlashcardSet, Flashcard, saveFlashcardSet, loadFlashcardSet } from '../services/flashcardStorage';
+import { Flashcard, FlashcardSet, loadFlashcardSet, saveFlashcardSet } from '../services/flashcardStorage';
 
 const NewFlashcardSet = () => {
   const { setId } = useLocalSearchParams();

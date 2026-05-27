@@ -32,7 +32,7 @@ export default function AnimatedSplashScreen({ onFinish }: { onFinish: () => voi
   return (
     <View style={styles.container}>
       <Animated.Image
-        source={require('../assets/images/wbg_Icono_CokoNa.png')} // Misma imagen que tu splash
+        source={require('../assets/images/wbg_Icono_CokoNa.png')}
         style={[
           styles.image,
           {
@@ -48,7 +48,7 @@ export default function AnimatedSplashScreen({ onFinish }: { onFinish: () => voi
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000', // El mismo de tu splash
+    backgroundColor: '#000000', 
     justifyContent: 'center',
     alignItems: 'center',
   },

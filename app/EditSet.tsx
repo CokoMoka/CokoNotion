@@ -1,31 +1,29 @@
-// app/(tabs)/NewFlashcardSet.tsx
-import React, { useState, useEffect, useRef } from "react";
+import * as FileSystem from 'expo-file-system/legacy';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import * as ImagePicker from 'expo-image-picker';
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  View,
-  Image,
-  ImageBackground,
-  TouchableOpacity,
-  Text,
-  ScrollView,
-  useWindowDimensions,
-  StyleSheet,
-  TextInput,
-  StatusBar,
-  Alert,
   ActivityIndicator,
+  Alert,
+  ImageBackground,
   Keyboard,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter, useLocalSearchParams } from "expo-router";
 import { AppImages } from "../constants/images";
-import * as ImagePicker from 'expo-image-picker';
-import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
-import * as FileSystem from 'expo-file-system/legacy';
-import { 
-  FlashcardSet, 
-  Flashcard, 
-  saveFlashcardSet, 
+import {
+  Flashcard,
+  FlashcardSet,
   loadFlashcardSet,
+  saveFlashcardSet,
 } from '../services/flashcardStorage';
 
 // Función para convertir imagen a Base64

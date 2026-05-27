@@ -1,10 +1,9 @@
-// app/_layout.tsx
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, View, Alert } from 'react-native';
-import { auth } from '../services/firebase';
+import { ActivityIndicator, Alert, View } from 'react-native';
 import { useShake } from '../hooks/useShake';
+import { auth } from '../services/firebase';
 
 export default function RootLayout() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
