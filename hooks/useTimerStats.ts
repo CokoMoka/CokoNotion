@@ -1,8 +1,9 @@
-// hooks/useTimerStats.ts
+// hooks/useTimerStats.ts - VERSIÓN CON AUDITORÍA
 import { useState, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useUser } from './useUser';
 import { updateUserStats, getUserData } from '../services/auth';
+import { logAudit } from '../services/auditLogger'; // 🔥 IMPORTAR AUDITORÍA
 
 interface TimerSession {
     duration: number;
@@ -24,6 +25,9 @@ export const useTimerStats = () => {
     const [localStats, setLocalStats] = useState<LocalTimerStats | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const processingRef = useRef(false);
+    
+    // 🔥 Ref para trackear el último pomodoro completado
+    const lastLoggedPomodoroRef = useRef<number>(0);
 
     const getTodayString = (): string => {
         return new Date().toISOString().split('T')[0];
@@ -82,7 +86,7 @@ export const useTimerStats = () => {
         await AsyncStorage.setItem(key, JSON.stringify(newStats));
     };
 
-    // 🔥 FUNCIÓN DE SINCRONIZACIÓN
+    // 🔥 FUNCIÓN DE SINCRONIZACIÓN CON AUDITORÍA
     const syncToFirestore = async () => {
         if (!user?.uid || !localStats) return;
         
@@ -121,7 +125,7 @@ export const useTimerStats = () => {
         }
     };
 
-    // 🔥 Agregar pomodoro
+    // 🔥 AGREGAR POMODORO CON AUDITORÍA
     const addPomodoro = async (minutes: number) => {
         if (processingRef.current) {
             console.log('⏳ Procesando...');
@@ -146,6 +150,10 @@ export const useTimerStats = () => {
         
         try {
             const today = getTodayString();
+            const isNewDay = localStats.lastSyncDate !== today;
+            
+            // 🔥 Calcular nuevo número de pomodoro
+            const nuevoNumeroPomodoro = isNewDay ? 1 : (localStats.todayPomodoros + 1);
             
             const newSession: TimerSession = {
                 duration: minutes,
@@ -158,7 +166,7 @@ export const useTimerStats = () => {
             let nuevasSessions = [newSession, ...localStats.sessions].slice(0, 50);
             let nuevaFecha = localStats.lastSyncDate;
             
-            if (localStats.lastSyncDate !== today) {
+            if (isNewDay) {
                 console.log('🔄 Nuevo día detectado');
                 nuevosPomodoros = 1;
                 nuevosMinutos = minutes;
@@ -179,6 +187,26 @@ export const useTimerStats = () => {
             await saveLocalStats(updatedStats);
             await syncToFirestore();
             
+            // 🔥 AUDITORÍA: Pomodoro completado
+            // Evitar duplicados
+            if (lastLoggedPomodoroRef.current !== nuevosPomodoros) {
+                await logAudit(
+                    'POMODORO_COMPLETED',
+                    user.uid,
+                    `Pomodoro #${nuevosPomodoros}`,
+                    `Completado ${minutes} minutos de estudio`,
+                    null,
+                    {
+                        duration: minutes,
+                        completedCount: nuevosPomodoros,
+                        isNewDay,
+                        totalMinutesToday: nuevosMinutos,
+                        timestamp: new Date().toISOString()
+                    }
+                );
+                lastLoggedPomodoroRef.current = nuevosPomodoros;
+            }
+            
         } catch (error) {
             console.error('Error en addPomodoro:', error);
         } finally {
@@ -186,40 +214,67 @@ export const useTimerStats = () => {
         }
     };
 
+    // 🔥 AGREGAR DESCANSO CON AUDITORÍA
     const addBreak = async () => {
         if (!user?.uid || !localStats) return;
         
-        const today = getTodayString();
-        
-        let nuevosBreaks = localStats.todayBreaks + 1;
-        let nuevasSessions = [...localStats.sessions];
-        let nuevaFecha = localStats.lastSyncDate;
-        
-        if (localStats.lastSyncDate !== today) {
-            nuevosBreaks = 1;
-            nuevaFecha = today;
+        try {
+            const today = getTodayString();
+            const isNewDay = localStats.lastSyncDate !== today;
+            
+            let nuevosBreaks = localStats.todayBreaks + 1;
+            let nuevasSessions = [...localStats.sessions];
+            let nuevaFecha = localStats.lastSyncDate;
+            
+            if (isNewDay) {
+                nuevosBreaks = 1;
+                nuevaFecha = today;
+            }
+            
+            const newSession: TimerSession = {
+                duration: 5,
+                timestamp: new Date().toISOString(),
+                type: 'break',
+            };
+            
+            nuevasSessions = [newSession, ...nuevasSessions].slice(0, 50);
+            
+            const updatedStats: LocalTimerStats = {
+                ...localStats,
+                sessions: nuevasSessions,
+                todayBreaks: nuevosBreaks,
+                lastSyncDate: nuevaFecha,
+            };
+            
+            await saveLocalStats(updatedStats);
+            
+            // 🔥 AUDITORÍA: Descanso completado
+            await logAudit(
+                'BREAK_COMPLETED',
+                user.uid,
+                `Descanso #${nuevosBreaks}`,
+                `Descanso de 5 minutos completado después de ${localStats.todayPomodoros} pomodoros`,
+                null,
+                {
+                    duration: 5,
+                    breakNumber: nuevosBreaks,
+                    pomodorosBeforeBreak: localStats.todayPomodoros,
+                    timestamp: new Date().toISOString()
+                }
+            );
+            
+        } catch (error) {
+            console.error('Error en addBreak:', error);
         }
-        
-        const newSession: TimerSession = {
-            duration: 5,
-            timestamp: new Date().toISOString(),
-            type: 'break',
-        };
-        
-        nuevasSessions = [newSession, ...nuevasSessions].slice(0, 50);
-        
-        const updatedStats: LocalTimerStats = {
-            ...localStats,
-            sessions: nuevasSessions,
-            todayBreaks: nuevosBreaks,
-            lastSyncDate: nuevaFecha,
-        };
-        
-        await saveLocalStats(updatedStats);
     };
 
+    // 🔥 RESET DIARIO CON AUDITORÍA
     const resetDailyStats = async () => {
+        if (!user?.uid) return;
+        
         const today = getTodayString();
+        const oldStats = localStats;
+        
         const resetStats: LocalTimerStats = {
             sessions: [],
             todayPomodoros: 0,
@@ -227,11 +282,32 @@ export const useTimerStats = () => {
             todayBreaks: 0,
             lastSyncDate: today,
         };
+        
         await saveLocalStats(resetStats);
         await syncToFirestore();
+        
+        // 🔥 AUDITORÍA: Reset diario (opcional)
+        if (oldStats && (oldStats.todayPomodoros > 0 || oldStats.todayMinutes > 0)) {
+            await logAudit(
+                'UPDATE_PROFILE_PREFERENCES', // Reutilizamos esta acción
+                user.uid,
+                'Reset de estadísticas diarias',
+                `Se reiniciaron ${oldStats.todayPomodoros} pomodoros y ${oldStats.todayMinutes} minutos`,
+                {
+                    previousPomodoros: oldStats.todayPomodoros,
+                    previousMinutes: oldStats.todayMinutes,
+                    previousBreaks: oldStats.todayBreaks
+                },
+                {
+                    newPomodoros: 0,
+                    newMinutes: 0,
+                    newBreaks: 0
+                }
+            );
+        }
     };
 
-    // 🔥 Función forceSync pública
+    // 🔥 FUNCIÓN DE FUERZA DE SINCRONIZACIÓN
     const forceSync = async () => {
         await syncToFirestore();
     };

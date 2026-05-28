@@ -13,9 +13,11 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
+  Modal,
+  TextInput
 } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
+import MapView, { Marker, Region, MapPressEvent } from 'react-native-maps';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Colors, getFontFamily } from '../../constants/theme';
 import { useCompass } from '../../hooks/useCompass';
@@ -28,7 +30,6 @@ import {
   updateStudyPoint
 } from '../../services/database';
 
-
 const { width, height } = Dimensions.get("window");
 
 const MapScreen = () => {
@@ -38,27 +39,26 @@ const MapScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [studyPoints, setStudyPoints] = useState<StudyPoint[]>([]);
   const [selectedPoint, setSelectedPoint] = useState<StudyPoint | null>(null);
+  
+  // Modales controlados estrictamente por JS
   const [modalVisible, setModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
+  
   const [newPointName, setNewPointName] = useState('');
   const [newPointNotes, setNewPointNotes] = useState('');
   const [tempLocation, setTempLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [editingPoint, setEditingPoint] = useState<StudyPoint | null>(null);
   
-  // 🔥 Estado para la brújula
+  // Brújula
   const { heading, direction, isAvailable, isCalibrating } = useCompass();
   const [showCompassHelp, setShowCompassHelp] = useState(true);
-  const [showCompassDetails, setShowCompassDetails] = useState(false); // ✅ AÑADIR ESTE ESTADO
+  const [showCompassDetails, setShowCompassDetails] = useState(false);
   
   const mapRef = useRef<MapView>(null);
-  const router = useRouter();
-  const theme = Colors.dark;
-  
   const font = (type: 'sans' | 'rounded' | 'mono' = 'sans') => ({
     fontFamily: getFontFamily(Platform.OS, type),
   });
 
-  // Región inicial
   const initialRegion: Region = {
     latitude: 24.1426,
     longitude: -110.3126,
@@ -66,7 +66,6 @@ const MapScreen = () => {
     longitudeDelta: 0.0421,
   };
 
-  // Cargar puntos de estudio
   const cargarPuntos = async () => {
     try {
       const points = await getStudyPoints();
@@ -76,15 +75,9 @@ const MapScreen = () => {
     }
   };
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await cargarPuntos();
-    setRefreshing(false);
-  }, []);
-
   useEffect(() => {
     const init = async () => {
-      await initStudyPointsTable();
+      // await initStudyPointsTable();
       await cargarPuntos();
       
       let { status } = await Location.requestForegroundPermissionsAsync();
@@ -93,12 +86,10 @@ const MapScreen = () => {
         setLoading(false);
         return;
       }
-
       let currentLocation = await Location.getCurrentPositionAsync({});
       setLocation(currentLocation);
       setLoading(false);
     };
-    
     init();
   }, []);
 
@@ -108,8 +99,15 @@ const MapScreen = () => {
     }, [])
   );
 
-  const handleMapPress = (event: any) => {
+  const handleMapPress = (event: MapPressEvent) => {
+    if (selectedPoint) {
+      setSelectedPoint(null);
+      return;
+    }
     const { coordinate } = event.nativeEvent;
+    if (!coordinate) return;
+    
+
     setTempLocation(coordinate);
     setNewPointName('');
     setNewPointNotes('');
@@ -123,7 +121,7 @@ const MapScreen = () => {
       longitude: point.longitude,
       latitudeDelta: 0.01,
       longitudeDelta: 0.01,
-    }, 1000);
+    }, 500);
   };
 
   const handleSavePoint = async () => {
@@ -131,7 +129,6 @@ const MapScreen = () => {
       Alert.alert('Error', 'Ingresa un nombre para el punto de estudio');
       return;
     }
-    
     if (tempLocation) {
       const success = await saveStudyPoint({
         name: newPointName.trim(),
@@ -139,18 +136,15 @@ const MapScreen = () => {
         longitude: tempLocation.longitude,
         notes: newPointNotes.trim() || undefined,
       });
-      
       if (success) {
         await cargarPuntos();
         setModalVisible(false);
         setTempLocation(null);
-        Alert.alert('Éxito', 'Punto de estudio guardado');
-      } else {
-        Alert.alert('Error', 'No se pudo guardar el punto');
       }
     }
   };
 
+  // 🔥 LÓGICA DE ACTUALIZACIÓN RESTAURADA
   const handleEditPoint = async () => {
     if (!editingPoint) return;
     if (!editingPoint.name.trim()) {
@@ -175,7 +169,6 @@ const MapScreen = () => {
 
   const handleDeletePoint = async () => {
     if (!selectedPoint) return;
-    
     Alert.alert(
       'Eliminar punto',
       `¿Estás seguro de eliminar "${selectedPoint.name}"?`,
@@ -190,8 +183,6 @@ const MapScreen = () => {
               await cargarPuntos();
               setSelectedPoint(null);
               Alert.alert('Éxito', 'Punto eliminado');
-            } else {
-              Alert.alert('Error', 'No se pudo eliminar el punto');
             }
           },
         },
@@ -202,20 +193,9 @@ const MapScreen = () => {
   if (loading) {
     return (
       <SafeAreaProvider>
-        <ImageBackground
-          source={AppImages.backgroundImg || require('../../assets/images/bD.jpg')}
-          style={styles.backgroundImage}
-          resizeMode="cover"
-        >
-          <View style={styles.overlay}>
-            <SafeAreaView style={styles.safeArea}>
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#df96c0" />
-                <Text style={styles.loadingText}>Cargando mapa...</Text>
-              </View>
-            </SafeAreaView>
-          </View>
-        </ImageBackground>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#df96c0" />
+        </View>
       </SafeAreaProvider>
     );
   }
@@ -233,125 +213,188 @@ const MapScreen = () => {
             
             <View style={styles.container}>
               
-              {/* Header con botón de retroceso */}
+              {/* HEADER */}
               <View style={styles.header}>
-               
-                <Text style={[styles.headerTitle, font('rounded')]}>
-                  Puntos de Estudio
-                </Text>
-                <View style={{ width: 40 }} />
+                <Text style={[styles.headerTitle, font('rounded')]}>Puntos de Estudio</Text>
               </View>
               
               <Text style={[styles.headerSubtitle, { color: '#b5b5b5' }, font('sans')]}>
                 Toca el mapa para agregar un lugar de estudio
               </Text>
 
-              {/* 🔥 BRÚJULA */}
-              <View style={styles.compassContainer}>
-                <TouchableOpacity 
-                  style={styles.compassWidget} 
-                  onPress={() => setShowCompassDetails(!showCompassDetails)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.compassWidgetInner}>
-                    <View style={[styles.compassWidgetNeedle, { transform: [{ rotate: `${heading}deg` }] }]}>
-                      <Text style={styles.compassWidgetArrow}>🧭</Text>
-                    </View>
-                    <Text style={styles.compassWidgetDirection}>{direction}</Text>
-                  </View>
-                </TouchableOpacity>
-
-                {showCompassDetails && (
-                  <View style={styles.compassDetails}>
-                    <Text style={styles.compassDetailsTitle}>Brújula</Text>
-                    <Text style={styles.compassDetailsDirection}>{direction}</Text>
-                    <Text style={styles.compassDetailsHeading}>{Math.round(heading)}°</Text>
-                    {isCalibrating && (
-                      <Text style={styles.compassCalibrating}>Calibrando...</Text>
-                    )}
-                    {!isAvailable && (
-                      <Text style={styles.compassUnavailable}>! Gira el teléfono</Text>
-                    )}
-                    {showCompassHelp && (
-                      <TouchableOpacity onPress={() => setShowCompassHelp(false)}>
-                        <Text style={styles.compassHelpClose}>✕ Cerrar ayuda</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                )}
-              </View>
-
-              {/* Mapa */}
+              {/* MAPA */}
               <View style={styles.mapContainer}>
                 <MapView
                   ref={mapRef}
-                  provider={PROVIDER_GOOGLE}
                   style={styles.map}
                   initialRegion={initialRegion}
                   showsUserLocation={true}
                   showsMyLocationButton={true}
-                  showsCompass={true}
+                  showsCompass={false}
                   onPress={handleMapPress}
                 >
                   {studyPoints.map((point) => (
                     <Marker
                       key={point.id}
-                      coordinate={{
-                        latitude: point.latitude,
-                        longitude: point.longitude,
-                      }}
+                      coordinate={{ latitude: point.latitude, longitude: point.longitude }}
                       title={point.name}
-                      description={point.notes || 'Lugar de estudio'}
                       pinColor="#df96c0"
-                      onPress={() => handleMarkerPress(point)}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleMarkerPress(point);
+                      }}
                     />
                   ))}
                 </MapView>
+
+                {/* BRÚJULA */}
+                <View style={styles.compassContainer} pointerEvents="box-none">
+                  <TouchableOpacity 
+                    style={styles.compassWidget} 
+                    onPress={() => setShowCompassDetails(!showCompassDetails)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.compassWidgetInner}>
+                      <View style={[styles.compassWidgetNeedle, { transform: [{ rotate: `${heading}deg` }] }]}>
+                        <Text style={styles.compassWidgetArrow}>🧭</Text>
+                      </View>
+                      <Text style={styles.compassWidgetDirection}>{direction}</Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  {showCompassDetails && (
+                    <View style={styles.compassDetails}>
+                      <Text style={styles.compassDetailsTitle}>Brújula</Text>
+                      <Text style={styles.compassDetailsDirection}>{direction}</Text>
+                      <Text style={styles.compassDetailsHeading}>{Math.round(heading)}°</Text>
+                    </View>
+                  )}
+                </View>
               </View>
 
-              {/* Panel de punto seleccionado */}
+              {/* 🔥 CARD DETALLE INFERIOR CON LOS BOTONES ORIGINALES RESTAURADOS */}
               {selectedPoint && (
-                <View style={[styles.selectedCard, { 
-                  backgroundColor: 'rgba(42, 47, 52, 0.95)', 
-                  borderColor: '#343a40' 
-                }]}>
+                <View style={styles.selectedCard}>
                   <View style={styles.selectedHeader}>
-                    <Text style={[styles.selectedName, { color: '#FFFFFF' }, font('rounded')]}>
-                      {selectedPoint.name}
-                    </Text>
+                    <Text style={[styles.selectedName, font('rounded')]}>{selectedPoint.name}</Text>
                     <TouchableOpacity onPress={() => setSelectedPoint(null)}>
-                      <Text style={[styles.closeIcon, { color: '#b5b5b5' }]}>✕</Text>
+                      <Text style={{ color: '#b5b5b5', fontSize: 18 }}>✕</Text>
                     </TouchableOpacity>
                   </View>
                   {selectedPoint.notes && (
-                    <Text style={[styles.selectedNotes, { color: '#b5b5b5' }, font('sans')]}>
-                      {selectedPoint.notes}
-                    </Text>
+                    <Text style={[styles.selectedNotes, font('sans')]}>{selectedPoint.notes}</Text>
                   )}
+                  
+                  {/* Menú de Editar y Borrar */}
                   <View style={styles.selectedActions}>
                     <TouchableOpacity 
-                      style={[styles.editButton, { borderColor: '#343a40' }]}
+                      style={styles.editButton}
                       onPress={() => {
                         setEditingPoint(selectedPoint);
                         setEditModalVisible(true);
-                        setSelectedPoint(null);
+                        setSelectedPoint(null); // Cierra la tarjeta para limpiar el flujo
                       }}
                     >
-                      <Text style={[styles.editButtonText, { color: "#df96c0" }]}>✎ Editar</Text>
+                      <Text style={{ color: "#df96c0", fontWeight: '500' }}>✎ Editar</Text>
                     </TouchableOpacity>
                     <TouchableOpacity 
-                      style={[styles.deleteButton, { borderColor: '#ff4444' }]}
+                      style={styles.deleteButton} 
                       onPress={handleDeletePoint}
                     >
-                      <Text style={[styles.deleteButtonText, { color: '#ff4444' }]}>X Eliminar</Text>
+                      <Text style={{ color: '#ff4444', fontWeight: '500' }}>X Eliminar</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
               )}
 
-              {/* Modales (agregar y editar) - mismos que ya tenías */}
-              {/* ... resto de tu código ... */}
-              
+              {/* MODAL PARA AGREGAR NUEVO PUNTO */}
+              {modalVisible && (
+                <Modal
+                  animationType="fade"
+                  transparent={true}
+                  visible={modalVisible}
+                  onRequestClose={() => setModalVisible(false)}
+                >
+                  <View style={styles.modalCenteredView}>
+                    <View style={styles.modalView}>
+                      <Text style={{ color: '#fff', fontSize: 18, marginBottom: 15, fontWeight: 'bold' }}>Nuevo Punto de Estudio</Text>
+                      <TextInput
+                        style={styles.modalInput}
+                        placeholder="Nombre del lugar"
+                        placeholderTextColor="#666"
+                        value={newPointName}
+                        onChangeText={setNewPointName}
+                      />
+                      <TextInput
+                        style={styles.modalInput}
+                        placeholder="Notas (opcional)"
+                        placeholderTextColor="#666"
+                        value={newPointNotes}
+                        onChangeText={setNewPointNotes}
+                      />
+                      <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+                        <TouchableOpacity style={[styles.modalButton, { backgroundColor: '#ff4444' }]} onPress={() => setModalVisible(false)}>
+                          <Text style={{ color: '#fff', fontWeight: 'bold' }}>Cancelar</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.modalButton, { backgroundColor: '#df96c0' }]} onPress={handleSavePoint}>
+                          <Text style={{ color: '#fff', fontWeight: 'bold' }}>Guardar</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                </Modal>
+              )}
+
+              {/* 🔥 MODAL PARA EDITAR PUNTO EXISTENTE (Restaurado e Inyectado con seguridad) */}
+              {editModalVisible && editingPoint && (
+                <Modal
+                  animationType="fade"
+                  transparent={true}
+                  visible={editModalVisible}
+                  onRequestClose={() => {
+                    setEditModalVisible(false);
+                    setEditingPoint(null);
+                  }}
+                >
+                  <View style={styles.modalCenteredView}>
+                    <View style={styles.modalView}>
+                      <Text style={{ color: '#fff', fontSize: 18, marginBottom: 15, fontWeight: 'bold' }}>Editar Punto</Text>
+                      <TextInput
+                        style={styles.modalInput}
+                        placeholder="Nombre del lugar"
+                        placeholderTextColor="#666"
+                        value={editingPoint.name}
+                        onChangeText={(text) => setEditingPoint({ ...editingPoint, name: text })}
+                      />
+                      <TextInput
+                        style={styles.modalInput}
+                        placeholder="Notas"
+                        placeholderTextColor="#666"
+                        value={editingPoint.notes || ''}
+                        onChangeText={(text) => setEditingPoint({ ...editingPoint, notes: text })}
+                      />
+                      <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+                        <TouchableOpacity 
+                          style={[styles.modalButton, { backgroundColor: '#ff4444' }]} 
+                          onPress={() => {
+                            setEditModalVisible(false);
+                            setEditingPoint(null);
+                          }}
+                        >
+                          <Text style={{ color: '#fff', fontWeight: 'bold' }}>Cancelar</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                          style={[styles.modalButton, { backgroundColor: '#df96c0' }]} 
+                          onPress={handleEditPoint}
+                        >
+                          <Text style={{ color: '#fff', fontWeight: 'bold' }}>Actualizar</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                </Modal>
+              )}
+
             </View>
           </SafeAreaView>
         </View>
@@ -361,216 +404,49 @@ const MapScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  fullScreenBackground: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-  },
-  backgroundImage: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-  },
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-  },
-  safeArea: {
-    flex: 1,
-  },
-  container: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 20,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#FFFFFF',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-    marginTop: 20,
-  },
-  backButton: {
-    padding: 8,
-  },
-  backIcon: {
-    fontSize: 28,
-    color: '#FFFFFF',
-  },
-  headerTitle: {
-    fontSize: 27,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
-    marginTop: 17,
-    textAlign: "center"
-  },
-  headerSubtitle: {
-    fontSize: 15,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  // 🔥 Estilos de la brújula
-  compassContainer: {
-    position: 'absolute',
-    top: 130,
-    right: 18,
-    zIndex: 10,
-  },
-  compassWidget: {
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    borderRadius: 50,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#df96c0',
-  },
-  compassWidgetInner: {
-    alignItems: 'center',
-  },
-  compassWidgetNeedle: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  compassWidgetArrow: {
-    fontSize: 24,
-  },
-  compassWidgetDirection: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: 'bold',
-    marginTop: 4,
-  },
-  compassDetails: {
-    position: 'absolute',
-    top: 70,
-    right: 0,
-    backgroundColor: 'rgba(0,0,0,0.85)',
-    borderRadius: 12,
-    padding: 12,
-    width: 140,
-    borderWidth: 1,
-    borderColor: '#df96c0',
-  },
-  compassDetailsTitle: {
-    color: '#df96c0',
-    fontSize: 12,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 6,
-  },
-  compassDetailsDirection: {
-    color: '#FFFFFF',
-    fontSize: 28,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  compassDetailsHeading: {
-    color: '#b5b5b5',
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  compassCalibrating: {
-    color: '#FF9800',
-    fontSize: 10,
-    textAlign: 'center',
-    marginTop: 6,
-  },
-  compassUnavailable: {
-    color: '#ff4444',
-    fontSize: 10,
-    textAlign: 'center',
-    marginTop: 6,
-  },
-  compassHelpClose: {
-    color: '#888888',
-    fontSize: 10,
-    textAlign: 'center',
-    marginTop: 8,
-  },
+  fullScreenBackground: { flex: 1 },
+  overlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.4)' },
+  safeArea: { flex: 1 },
+  container: { flex: 1, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 20 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  header: { alignItems: 'center', marginTop: 20 },
+  headerTitle: { fontSize: 27, fontWeight: '700', color: '#FFFFFF', textAlign: "center" },
+  headerSubtitle: { fontSize: 15, marginBottom: 12, textAlign: 'center' },
+  
   mapContainer: {
     flex: 1,
     borderRadius: 20,
     overflow: 'hidden',
     marginBottom: 15,
+    position: 'relative',
   },
-  map: {
-    width: '100%',
-    height: '100%',
-  },
-  selectedCard: {
-    position: 'absolute',
-    bottom: 20,
-    left: 16,
-    right: 16,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  selectedHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  selectedName: {
-    fontSize: 18,
-    fontWeight: '600',
-    flex: 1,
-  },
-  closeIcon: {
-    fontSize: 18,
-    padding: 4,
-  },
-  selectedNotes: {
-    fontSize: 14,
-    marginBottom: 12,
-  },
-  selectedActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  editButton: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignItems: 'center',
-    borderWidth: 1,
-  },
-  editButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  deleteButton: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignItems: 'center',
-    borderWidth: 1,
-  },
-  deleteButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
+  map: { width: '100%', height: '100%' },
+
+  compassContainer: { position: 'absolute', top: 20, right: 18, zIndex: 99 },
+  compassWidget: { backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: 50, padding: 10, borderWidth: 1, borderColor: '#df96c0' },
+  compassWidgetInner: { alignItems: 'center' },
+  compassWidgetNeedle: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  compassWidgetArrow: { fontSize: 24 },
+  compassWidgetDirection: { color: '#FFFFFF', fontSize: 12, fontWeight: 'bold', marginTop: 4 },
+  compassDetails: { position: 'absolute', top: 70, right: 0, backgroundColor: 'rgba(0,0,0,0.85)', borderRadius: 12, padding: 12, width: 140, borderWidth: 1, borderColor: '#df96c0' },
+  compassDetailsTitle: { color: '#df96c0', fontSize: 12, fontWeight: 'bold', textAlign: 'center', marginBottom: 6 },
+  compassDetailsDirection: { color: '#FFFFFF', fontSize: 28, fontWeight: 'bold', textAlign: 'center' },
+  compassDetailsHeading: { color: '#b5b5b5', fontSize: 14, textAlign: 'center' },
+  
+  // Card inferior completa
+  selectedCard: { position: 'absolute', bottom: 20, left: 16, right: 16, borderRadius: 16, padding: 16, backgroundColor: 'rgba(42, 47, 52, 0.95)', borderWidth: 1, borderColor: '#343a40', elevation: 5 },
+  selectedHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  selectedName: { fontSize: 18, fontWeight: '600', color: '#FFFFFF' },
+  selectedNotes: { fontSize: 14, marginBottom: 12, color: '#b5b5b5' },
+  selectedActions: { flexDirection: 'row', gap: 12, marginTop: 4 },
+  editButton: { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: '#343a40' },
+  deleteButton: { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: '#ff4444' },
+
+  // Modales
+  modalCenteredView: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.7)' },
+  modalView: { width: '85%', backgroundColor: '#1e222b', borderRadius: 20, padding: 20, alignItems: 'center', borderWidth: 1, borderColor: '#333' },
+  modalInput: { width: '100%', backgroundColor: '#2a2f34', color: '#fff', borderRadius: 8, padding: 12, marginBottom: 12 },
+  modalButton: { flex: 1, padding: 12, borderRadius: 8, alignItems: 'center' },
 });
 
 export default MapScreen;

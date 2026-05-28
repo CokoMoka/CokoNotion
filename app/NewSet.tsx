@@ -24,8 +24,11 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { 
   FlashcardSet, 
   Flashcard, 
-  saveFlashcardSet, 
+  createFlashcardSet,      // 🔥 NUEVO: para crear con auditoría
+  updateFlashcardSet,      // 🔥 NUEVO: para actualizar con auditoría
   loadFlashcardSet,
+  updateSetCover,
+  deleteSetCover,
 } from '../services/flashcardStorage';
 
 // Función para convertir imagen a Base64 (local)
@@ -65,6 +68,7 @@ export default function CreateSetScreen() {
   const [loading, setLoading] = useState(!!setId);
   const [saving, setSaving] = useState(false);
   const [setTitle, setSetTitle] = useState(setId ? "Editar Set" : "Nuevo Set");
+  const [existingSetId, setExistingSetId] = useState<string | null>(setId ? String(setId) : null);
   
   // Estado para la portada
   const [coverImage, setCoverImage] = useState<string | null>(null);
@@ -86,6 +90,7 @@ export default function CreateSetScreen() {
       if (set) {
         setSetName(set.name);
         setCards(set.cards);
+        setExistingSetId(set.id);
         if (set.coverBase64) {
           setCoverImage(set.coverBase64);
         }
@@ -165,7 +170,7 @@ export default function CreateSetScreen() {
     );
   };
 
-  // Función para editar la portada
+  // 🔥 Función para editar la portada (usa updateSetCover)
   const handleEditCover = async () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -184,22 +189,21 @@ export default function CreateSetScreen() {
       if (!result.canceled && result.assets[0]) {
         setUploadingCover(true);
         const imageUri = result.assets[0].uri;
-        const base64Image = await imageToBase64(imageUri);
         
-        if (setId) {
-          // Cargar set actual, actualizar portada y guardar
-          const set = await loadFlashcardSet(setId as string);
-          if (set) {
-            set.coverBase64 = base64Image;
-            const success = await saveFlashcardSet(set);
-            if (success) {
-              setCoverImage(base64Image);
-              Alert.alert('Éxito', 'Portada actualizada correctamente');
-            } else {
-              Alert.alert('Error', 'No se pudo actualizar la portada');
+        if (existingSetId) {
+          // Usar updateSetCover con auditoría
+          const success = await updateSetCover(existingSetId, imageUri);
+          if (success) {
+            const updatedSet = await loadFlashcardSet(existingSetId);
+            if (updatedSet?.coverBase64) {
+              setCoverImage(updatedSet.coverBase64);
             }
+            Alert.alert('Éxito', 'Portada actualizada correctamente');
+          } else {
+            Alert.alert('Error', 'No se pudo actualizar la portada');
           }
         } else {
+          const base64Image = await imageToBase64(imageUri);
           setCoverImage(base64Image);
           Alert.alert('Portada seleccionada', 'La portada se guardará al crear el set');
         }
@@ -212,6 +216,39 @@ export default function CreateSetScreen() {
     }
   };
 
+  // 🔥 FUNCIÓN PARA ELIMINAR PORTADA
+  const handleDeleteCover = async () => {
+    if (!existingSetId) {
+      setCoverImage(null);
+      Alert.alert('Portada eliminada', 'La portada se eliminará al guardar');
+      return;
+    }
+    
+    Alert.alert(
+      'Eliminar portada',
+      '¿Estás seguro de eliminar esta portada?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            setUploadingCover(true);
+            const success = await deleteSetCover(existingSetId);
+            if (success) {
+              setCoverImage(null);
+              Alert.alert('Éxito', 'Portada eliminada');
+            } else {
+              Alert.alert('Error', 'No se pudo eliminar la portada');
+            }
+            setUploadingCover(false);
+          }
+        }
+      ]
+    );
+  };
+
+  // 🔥 saveSet CORREGIDO - Usa createFlashcardSet y updateFlashcardSet
   const saveSet = async () => {
     if (!setName.trim()) {
       Alert.alert('Error', 'Ingresa un nombre para el set');
@@ -224,23 +261,41 @@ export default function CreateSetScreen() {
 
     setSaving(true);
 
-    const newSet: FlashcardSet = {
-      id: setId ? String(setId) : Date.now().toString(),
-      name: setName.trim(),
-      cards,
-      createdAt: new Date().toISOString(),
-      coverBase64: coverImage || undefined,
-    };
-
-    const success = await saveFlashcardSet(newSet);
-    setSaving(false);
-
-    if (success) {
-      Alert.alert('Éxito', 'Set guardado correctamente', [
-        { text: 'OK', onPress: () => router.back() }
-      ]);
+    if (existingSetId) {
+      // 🔥 EDITAR SET EXISTENTE
+      console.log('🔄 EDITANDO set existente:', existingSetId);
+      const success = await updateFlashcardSet(existingSetId, {
+        name: setName.trim(),
+        cards: cards,
+      });
+      
+      setSaving(false);
+      
+      if (success) {
+        Alert.alert('Éxito', 'Set actualizado correctamente', [
+          { text: 'OK', onPress: () => router.back() }
+        ]);
+      } else {
+        Alert.alert('Error', 'No se pudo actualizar el set');
+      }
     } else {
-      Alert.alert('Error', 'No se pudo guardar el set');
+      // 🔥 CREAR NUEVO SET
+      console.log('🆕 CREANDO nuevo set');
+      const newSet = await createFlashcardSet(setName.trim(), cards);
+      
+      setSaving(false);
+      
+      if (newSet) {
+        // Si hay portada, actualizarla después de crear
+        if (coverImage) {
+          await updateSetCover(newSet.id, coverImage);
+        }
+        Alert.alert('Éxito', 'Set guardado correctamente', [
+          { text: 'OK', onPress: () => router.back() }
+        ]);
+      } else {
+        Alert.alert('Error', 'No se pudo guardar el set');
+      }
     }
   };
 
@@ -292,26 +347,44 @@ export default function CreateSetScreen() {
                     resizeMode="cover"
                     style={[styles.banner, { height: s(120) }]}
                   />
-                  <TouchableOpacity
-                    style={[styles.editCoverButton, { 
-                      paddingVertical: s(5),
-                      borderRadius: s(32),
-                      marginBottom: s(40),
-                      marginTop: s(-40)
-                    }]}
-                    onPress={handleEditCover}
-                    disabled={uploadingCover}
-                  >
-                    <Text style={[styles.editCoverText]}>
-                      {uploadingCover ? '⏳ Subiendo...' : coverImage ? '🖼️ Cambiar Portada' : '📷 Agregar Portada'}
-                    </Text>
-                  </TouchableOpacity>
+                  <View style={{ alignItems: 'center' }}>
+                    <TouchableOpacity
+                      style={[styles.editCoverButton, { 
+                        paddingVertical: s(5),
+                        borderRadius: s(32),
+                        marginTop: s(-40)
+                      }]}
+                      onPress={handleEditCover}
+                      disabled={uploadingCover}
+                    >
+                      <Text style={[styles.editCoverText]}>
+                        {uploadingCover ? '⏳ Subiendo...' : coverImage ? '🖼️ Cambiar Portada' : '📷 Agregar Portada'}
+                      </Text>
+                    </TouchableOpacity>
+                    
+                    {coverImage && !uploadingCover && existingSetId && (
+                      <TouchableOpacity
+                        style={[styles.deleteCoverButton, { 
+                          paddingVertical: s(4),
+                          borderRadius: s(20),
+                          marginTop: s(5),
+                          paddingHorizontal: s(16),
+                          backgroundColor: 'rgba(244, 67, 54, 0.8)',
+                        }]}
+                        onPress={handleDeleteCover}
+                      >
+                        <Text style={[styles.deleteCoverText, { fontSize: s(10), color: '#FFFFFF' }]}>
+                          🗑️ Eliminar portada
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
 
                 {/* Título del Set */}
-                <View style={[styles.setTitleContainer, { marginTop: s(-40), marginBottom: s(20) }]}>
+                <View style={[styles.setTitleContainer, { marginTop: s(-30), marginBottom: s(20) }]}>
                   <Text style={[styles.setTitle]}>
-                    {setId ? 'Editar Set' : 'Nuevo Set'}
+                    {existingSetId ? 'Editar Set' : 'Nuevo Set'}
                   </Text>
                 </View>
 
@@ -661,12 +734,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     width: 220,
     marginHorizontal: 'auto',
-    marginTop: -63,
   },
   editCoverText: {
     color: '#FFFFFF',
     fontWeight: 'bold',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  deleteCoverButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteCoverText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
   },
 });

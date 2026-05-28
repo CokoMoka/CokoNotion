@@ -19,7 +19,6 @@ import {
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Colors, getFontFamily } from '../constants/theme';
 import { deleteNote, getNoteById, Note, updateNote } from '../services/database';
-import { incrementUserTasksCompleted, decrementUserTasksCompleted } from '../services/database';
 
 type TaskItem = {
   text: string;
@@ -108,12 +107,12 @@ const NoteDetailScreen = () => {
     newTasks[index] = { ...newTasks[index], completed: !newTasks[index].completed };
     setEditTasks(newTasks);
     
-    // 🔥 Actualizar contador en Firestore
-    if (!wasCompleted && newTasks[index].completed) {
-      await incrementUserTasksCompleted();
-    } else if (wasCompleted && !newTasks[index].completed) {
-      await decrementUserTasksCompleted();
-    }
+    // // 🔥 Actualizar contador en Firestore
+    // if (!wasCompleted && newTasks[index].completed) {
+    //   await incrementUserTasksCompleted();
+    // } else if (wasCompleted && !newTasks[index].completed) {
+    //   await decrementUserTasksCompleted();
+    // }
   };
 
   const removeTask = (index: number) => {
@@ -121,68 +120,50 @@ const NoteDetailScreen = () => {
     setEditTasks(newTasks);
   };
 
-  // 🔥 FUNCIÓN MODIFICADA: Comparar estado anterior al guardar
-  const handleSave = async () => {
-    if (!editTitle.trim()) {
-      Alert.alert('Error', 'El título no puede estar vacío');
+const handleSave = async () => {
+  if (!editTitle.trim()) {
+    Alert.alert('Error', 'El título no puede estar vacío');
+    return;
+  }
+
+  if (note?.type === 'tarea') {
+    const validTasks = editTasks.filter(t => t.text.trim());
+    if (validTasks.length === 0) {
+      Alert.alert('Error', 'Agrega al menos una tarea');
       return;
     }
+  }
 
-    if (note?.type === 'tarea') {
-      const validTasks = editTasks.filter(t => t.text.trim());
-      if (validTasks.length === 0) {
-        Alert.alert('Error', 'Agrega al menos una tarea');
-        return;
-      }
-    }
+  setSaving(true);
 
-    // 🔥 Calcular cambio en tareas completadas
-    const oldCompletedCount = note?.tasks?.filter((t: any) => t.completed === true).length || 0;
-    const newCompletedCount = editTasks.filter(t => t.completed).length;
-
-    setSaving(true);
-
-    const updates: Partial<Note> = {
-      title: editTitle.trim(),
-      content: editContent.trim(),
-      isImportant: editIsImportant,
-    };
-
-    if (note?.type === 'tarea') {
-      updates.tasks = editTasks.filter(t => t.text.trim());
-    }
-    
-    if (editEmoji.trim()) {
-      updates.emoji = editEmoji.trim();
-    } else if (editEmoji === '') {
-      updates.emoji = undefined;
-    }
-
-    const result = await updateNote(id as string, updates);
-    
-    // 🔥 Actualizar contador en Firestore según el cambio
-    if (result.success) {
-      if (newCompletedCount > oldCompletedCount) {
-        const diff = newCompletedCount - oldCompletedCount;
-        // for (let i = 0; i < diff; i++) {
-        //   await incrementUserTasksCompleted();
-        // }
-      } else if (newCompletedCount < oldCompletedCount) {
-        const diff = oldCompletedCount - newCompletedCount;
-        // for (let i = 0; i < diff; i++) {
-        //   await decrementUserTasksCompleted();
-        // }
-      }
-      
-      setEditing(false);
-      cargarNota();
-      Alert.alert('Éxito', 'Nota actualizada correctamente');
-    } else {
-      Alert.alert('Error', 'No se pudo actualizar la nota');
-    }
-    
-    setSaving(false);
+  const updates: Partial<Note> = {
+    title: editTitle.trim(),
+    content: editContent.trim(),
+    isImportant: editIsImportant,
   };
+
+  if (note?.type === 'tarea') {
+    updates.tasks = editTasks.filter(t => t.text.trim());
+  }
+  
+  if (editEmoji.trim()) {
+    updates.emoji = editEmoji.trim();
+  } else if (editEmoji === '') {
+    updates.emoji = undefined;
+  }
+
+  const result = await updateNote(id as string, updates);
+  
+  if (result.success) {
+    setEditing(false);
+    cargarNota();
+    Alert.alert('Éxito', 'Nota actualizada correctamente');
+  } else {
+    Alert.alert('Error', 'No se pudo actualizar la nota');
+  }
+  
+  setSaving(false);
+};
 
   const handleDelete = () => {
     Alert.alert(

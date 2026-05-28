@@ -1,4 +1,4 @@
-// services/auth.ts - Versión simplificada (sin RTDB en registro)
+// services/auth.ts - VERSIÓN COMPLETA CON AUDITORÍA
 
 import { 
   createUserWithEmailAndPassword, 
@@ -27,6 +27,10 @@ import {
 import { auth, db, storage } from './firebase';
 import * as ImagePicker from 'expo-image-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import { logAudit } from './auditLogger';
+import { Platform } from 'react-native';
+
+// ... (mantén tu interfaz UserData igual) ...
 
 export interface UserData {
   uid: string;
@@ -50,12 +54,12 @@ export interface UserData {
   totalPomodoros?: number;
   pomodorosHoy?: number;
   minutosEstudioHoy?: number;
-  ultimoDiaEstudio?: string | null; // 🔥 Permitir null
+  ultimoDiaEstudio?: string | null;
   fraseMotivacional?: string;
   autorFrase?: string;
 }
 
-// ========== FUNCIONES PARA MANEJAR IMÁGENES ==========
+// ========== FUNCIONES PARA MANEJAR IMÁGENES CON AUDITORÍA ==========
 
 const processImage = async (uri: string): Promise<string> => {
   try {
@@ -71,11 +75,15 @@ const processImage = async (uri: string): Promise<string> => {
   }
 };
 
+// 🔥 MEJORADO: uploadUserAvatar con auditoría
 export const uploadUserAvatar = async (
   uid: string,
   imageUri: string
 ): Promise<{ success: boolean; url?: string; error?: string }> => {
   try {
+    const oldUserData = await getUserData(uid);
+    const oldAvatarURL = oldUserData?.avatarURL;
+    
     const processedUri = await processImage(imageUri);
     const response = await fetch(processedUri);
     const blob = await response.blob();
@@ -93,6 +101,16 @@ export const uploadUserAvatar = async (
       await firebaseUpdateProfile(user, { photoURL: downloadUrl });
     }
     
+    // ✅ Registrar auditoría
+    await logAudit(
+      'UPDATE_AVATAR',
+      uid,
+      user?.displayName || 'Usuario',
+      `Avatar actualizado`,
+      { previousAvatar: oldAvatarURL },
+      { newAvatar: downloadUrl }
+    );
+    
     return { success: true, url: downloadUrl };
   } catch (error: any) {
     console.log('Error al subir avatar:', error);
@@ -100,11 +118,15 @@ export const uploadUserAvatar = async (
   }
 };
 
+// 🔥 MEJORADO: uploadUserBanner con auditoría
 export const uploadUserBanner = async (
   uid: string,
   imageUri: string
 ): Promise<{ success: boolean; url?: string; error?: string }> => {
   try {
+    const oldUserData = await getUserData(uid);
+    const oldBannerURL = oldUserData?.bannerURL;
+    
     const result = await manipulateAsync(
       imageUri,
       [{ resize: { width: 1200 } }],
@@ -122,6 +144,16 @@ export const uploadUserBanner = async (
     const userRef = doc(db, 'users', uid);
     await updateDoc(userRef, { bannerURL: downloadUrl });
     
+    // ✅ Registrar auditoría
+    await logAudit(
+      'UPDATE_BANNER',
+      uid,
+      auth.currentUser?.displayName || 'Usuario',
+      `Banner actualizado`,
+      { previousBanner: oldBannerURL },
+      { newBanner: downloadUrl }
+    );
+    
     return { success: true, url: downloadUrl };
   } catch (error: any) {
     console.log('Error al subir banner:', error);
@@ -129,13 +161,27 @@ export const uploadUserBanner = async (
   }
 };
 
+// 🔥 MEJORADO: deleteUserAvatar con auditoría
 export const deleteUserAvatar = async (uid: string): Promise<{ success: boolean; error?: string }> => {
   try {
+    const oldUserData = await getUserData(uid);
+    const oldAvatarURL = oldUserData?.avatarURL;
+    
     const imageRef = ref(storage, `users/${uid}/avatar.jpg`);
     await deleteObject(imageRef);
     
     const userRef = doc(db, 'users', uid);
     await updateDoc(userRef, { avatarURL: null });
+    
+    // ✅ Registrar auditoría
+    await logAudit(
+      'DELETE_AVATAR',
+      uid,
+      auth.currentUser?.displayName || 'Usuario',
+      `Avatar eliminado`,
+      { previousAvatar: oldAvatarURL },
+      { newAvatar: null }
+    );
     
     return { success: true };
   } catch (error: any) {
@@ -147,13 +193,27 @@ export const deleteUserAvatar = async (uid: string): Promise<{ success: boolean;
   }
 };
 
+// 🔥 MEJORADO: deleteUserBanner con auditoría
 export const deleteUserBanner = async (uid: string): Promise<{ success: boolean; error?: string }> => {
   try {
+    const oldUserData = await getUserData(uid);
+    const oldBannerURL = oldUserData?.bannerURL;
+    
     const imageRef = ref(storage, `users/${uid}/banner.jpg`);
     await deleteObject(imageRef);
     
     const userRef = doc(db, 'users', uid);
     await updateDoc(userRef, { bannerURL: null });
+    
+    // ✅ Registrar auditoría
+    await logAudit(
+      'DELETE_BANNER',
+      uid,
+      auth.currentUser?.displayName || 'Usuario',
+      `Banner eliminado`,
+      { previousBanner: oldBannerURL },
+      { newBanner: null }
+    );
     
     return { success: true };
   } catch (error: any) {
@@ -165,49 +225,7 @@ export const deleteUserBanner = async (uid: string): Promise<{ success: boolean;
   }
 };
 
-export const pickImage = async (): Promise<string | null> => {
-  try {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.8,
-    });
-    
-    if (!result.canceled) {
-      return result.assets[0].uri;
-    }
-    return null;
-  } catch (error) {
-    console.log('Error al seleccionar imagen:', error);
-    return null;
-  }
-};
-
-export const takePhoto = async (): Promise<string | null> => {
-  try {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    
-    if (status !== 'granted') {
-      alert('Se necesita permiso para usar la cámara');
-      return null;
-    }
-    
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.8,
-    });
-    
-    if (!result.canceled) {
-      return result.assets[0].uri;
-    }
-    return null;
-  } catch (error) {
-    console.log('Error al tomar foto:', error);
-    return null;
-  }
-};
+// ... (mantén pickImage y takePhoto igual) ...
 
 // ========== FUNCIONES DE AUTENTICACIÓN ==========
 
@@ -265,6 +283,7 @@ export const getUserProfile = async (): Promise<{
   }
 };
 
+// 🔥 MEJORADO: registerUser con auditoría ya lo tienes ✅
 export const registerUser = async (
   email: string,
   password: string,
@@ -276,7 +295,6 @@ export const registerUser = async (
 
     await firebaseUpdateProfile(user, { displayName });
 
-    // 🔥 CORREGIDO: Eliminar undefined, usar null en su lugar
     const userData: UserData = {
       uid: user.uid,
       email: user.email!,
@@ -294,8 +312,8 @@ export const registerUser = async (
       totalPomodoros: 0,
       pomodorosHoy: 0,
       minutosEstudioHoy: 0,
-      ultimoDiaEstudio: null, // 🔥 Cambiar undefined por null
-      avatarURL: null, // 🔥 También cambiar estos
+      ultimoDiaEstudio: null,
+      avatarURL: null,
       bannerURL: null,
       backgroundURL: null,
       coverURL: null,
@@ -305,6 +323,15 @@ export const registerUser = async (
 
     await setDoc(doc(db, 'users', user.uid), userData);
     console.log('✅ Usuario guardado en Firestore');
+    
+    await logAudit(
+      'USER_REGISTER',
+      user.uid,
+      displayName,
+      `Usuario registrado con email: ${email}`,
+      null,
+      { email, displayName }
+    );
 
     return { success: true, user };
   } catch (error: any) {
@@ -330,6 +357,7 @@ export const registerUser = async (
   }
 };
 
+// 🔥 MEJORADO: loginUser con auditoría ya lo tienes ✅
 export const loginUser = async (
   email: string,
   password: string
@@ -341,6 +369,15 @@ export const loginUser = async (
     await updateDoc(doc(db, 'users', user.uid), {
       lastLogin: new Date().toISOString()
     });
+
+    await logAudit(
+      'USER_LOGIN',
+      user.uid,
+      user.displayName || email,
+      `Inicio de sesión desde ${Platform.OS}`,
+      null,
+      { platform: Platform.OS, timestamp: new Date().toISOString() }
+    );
 
     return { success: true, user };
   } catch (error: any) {
@@ -368,8 +405,21 @@ export const loginUser = async (
   }
 };
 
+// 🔥 MEJORADO: logoutUser con auditoría
 export const logoutUser = async (): Promise<{ success: boolean; error?: string }> => {
   try {
+    const user = auth.currentUser;
+    if (user) {
+      await logAudit(
+        'USER_LOGOUT',
+        user.uid,
+        user.displayName || 'Usuario',
+        `Cierre de sesión desde ${Platform.OS}`,
+        null,
+        { platform: Platform.OS }
+      );
+    }
+    
     await signOut(auth);
     return { success: true };
   } catch (error: any) {
@@ -402,8 +452,20 @@ export const resetPassword = async (email: string): Promise<{ success: boolean; 
   }
 };
 
-// ========== FUNCIONES DE ACTUALIZACIÓN ==========
+// ========== FUNCIONES DE ACTUALIZACIÓN MEJORADAS ==========
 
+// 🔥 NUEVA FUNCIÓN para obtener el estado anterior antes de actualizar
+const getPreviousUserState = async (uid: string): Promise<any> => {
+  try {
+    const userData = await getUserData(uid);
+    return userData;
+  } catch (error) {
+    console.log('Error al obtener estado anterior:', error);
+    return null;
+  }
+};
+
+// 🔥 MEJORADO: updateUserProfile con auditoría completa
 export const updateUserProfile = async (
   uid: string,
   updates: {
@@ -422,10 +484,15 @@ export const updateUserProfile = async (
       return { success: false, error: 'No hay usuario autenticado' };
     }
     
+    // 🔥 Obtener estado anterior
+    const previousState = await getPreviousUserState(uid);
+    const changes: string[] = [];
+    
     // Actualizar email en Auth
     if (updates.email && user && updates.email !== user.email) {
       try {
         await firebaseUpdateEmail(user, updates.email);
+        changes.push(`Email: ${previousState?.email} → ${updates.email}`);
         console.log('✅ Email actualizado en Auth');
       } catch (emailError: any) {
         console.log('Error al actualizar email:', emailError.code);
@@ -444,22 +511,35 @@ export const updateUserProfile = async (
     if (updates.displayName && user && updates.displayName !== user.displayName) {
       try {
         await firebaseUpdateProfile(user, { displayName: updates.displayName });
+        changes.push(`Nombre: ${previousState?.displayName} → ${updates.displayName}`);
         console.log('✅ Nombre actualizado en Auth');
       } catch (profileError: any) {
         console.log('Error al actualizar nombre:', profileError.code);
       }
     }
     
-    // 🔥 CORREGIDO: Definir userRef correctamente
+    // Actualizar en Firestore
     const userRef = doc(db, 'users', uid);
     const updateData: any = {};
     
     if (updates.displayName !== undefined) updateData.displayName = updates.displayName;
     if (updates.email !== undefined) updateData.email = updates.email;
-    if (updates.modoOscuro !== undefined) updateData.modoOscuro = updates.modoOscuro;
-    if (updates.notificaciones !== undefined) updateData.notificaciones = updates.notificaciones;
-    if (updates.recordatorios !== undefined) updateData.recordatorios = updates.recordatorios;
-    if (updates.sonidos !== undefined) updateData.sonidos = updates.sonidos;
+    if (updates.modoOscuro !== undefined) {
+      updateData.modoOscuro = updates.modoOscuro;
+      changes.push(`Modo Oscuro: ${previousState?.modoOscuro} → ${updates.modoOscuro}`);
+    }
+    if (updates.notificaciones !== undefined) {
+      updateData.notificaciones = updates.notificaciones;
+      changes.push(`Notificaciones: ${previousState?.notificaciones} → ${updates.notificaciones}`);
+    }
+    if (updates.recordatorios !== undefined) {
+      updateData.recordatorios = updates.recordatorios;
+      changes.push(`Recordatorios: ${previousState?.recordatorios} → ${updates.recordatorios}`);
+    }
+    if (updates.sonidos !== undefined) {
+      updateData.sonidos = updates.sonidos;
+      changes.push(`Sonidos: ${previousState?.sonidos} → ${updates.sonidos}`);
+    }
     
     // Eliminar undefined
     Object.keys(updateData).forEach(key => {
@@ -473,6 +553,55 @@ export const updateUserProfile = async (
     await updateDoc(userRef, updateData);
     console.log('✅ Datos actualizados en Firestore');
     
+    // ✅ Registrar auditoría según el tipo de cambio
+    if (updates.displayName && updates.displayName !== previousState?.displayName) {
+      await logAudit(
+        'UPDATE_PROFILE_NAME',
+        uid,
+        updates.displayName,
+        `Nombre actualizado`,
+        { previousName: previousState?.displayName },
+        { newName: updates.displayName }
+      );
+    }
+    
+    if (updates.email && updates.email !== previousState?.email) {
+      await logAudit(
+        'UPDATE_PROFILE_EMAIL',
+        uid,
+        user.displayName || 'Usuario',
+        `Email actualizado`,
+        { previousEmail: previousState?.email },
+        { newEmail: updates.email }
+      );
+    }
+    
+    if (updates.modoOscuro !== undefined || updates.notificaciones !== undefined || 
+        updates.recordatorios !== undefined || updates.sonidos !== undefined) {
+      await logAudit(
+        'UPDATE_PROFILE_PREFERENCES',
+        uid,
+        user.displayName || 'Usuario',
+        `Preferencias actualizadas: ${changes.filter(c => c.includes('Modo') || c.includes('Notificaciones') || c.includes('Recordatorios') || c.includes('Sonidos')).join(', ')}`,
+        {
+          previous: {
+            modoOscuro: previousState?.modoOscuro,
+            notificaciones: previousState?.notificaciones,
+            recordatorios: previousState?.recordatorios,
+            sonidos: previousState?.sonidos
+          }
+        },
+        {
+          new: {
+            modoOscuro: updates.modoOscuro,
+            notificaciones: updates.notificaciones,
+            recordatorios: updates.recordatorios,
+            sonidos: updates.sonidos
+          }
+        }
+      );
+    }
+    
     return { success: true };
   } catch (error: any) {
     console.log('Error general al actualizar perfil:', error);
@@ -480,6 +609,7 @@ export const updateUserProfile = async (
   }
 };
 
+// 🔥 MEJORADO: updateUserStats con auditoría
 export const updateUserStats = async (
   uid: string,
   stats: {
@@ -494,8 +624,30 @@ export const updateUserStats = async (
   }
 ): Promise<{ success: boolean; error?: string }> => {
   try {
+    const previousState = await getPreviousUserState(uid);
     const userRef = doc(db, 'users', uid);
     await updateDoc(userRef, stats);
+    
+    // ✅ Registrar cambios en estadísticas (opcional, si quieres trackear)
+    const changes: string[] = [];
+    if (stats.racha !== undefined && stats.racha !== previousState?.racha) {
+      changes.push(`Racha: ${previousState?.racha} → ${stats.racha}`);
+    }
+    if (stats.horasEstudio !== undefined && stats.horasEstudio !== previousState?.horasEstudio) {
+      changes.push(`Horas estudio: ${previousState?.horasEstudio} → ${stats.horasEstudio}`);
+    }
+    
+    if (changes.length > 0) {
+      await logAudit(
+        'UPDATE_PROFILE_PREFERENCES', // Podrías crear 'UPDATE_STATS' si lo prefieres
+        uid,
+        auth.currentUser?.displayName || 'Usuario',
+        `Estadísticas actualizadas: ${changes.join(', ')}`,
+        { previous: previousState },
+        { new: stats }
+      );
+    }
+    
     return { success: true };
   } catch (error) {
     console.log('Error al actualizar estadísticas:', error);
@@ -503,18 +655,37 @@ export const updateUserStats = async (
   }
 };
 
+// 🔥 MEJORADO: updateUserPhrase con auditoría
 export const updateUserPhrase = async (
   uid: string,
   frase: string,
   autor?: string
 ): Promise<{ success: boolean; error?: string }> => {
   try {
+    const previousState = await getPreviousUserState(uid);
     const userRef = doc(db, 'users', uid);
     const updates: any = { fraseMotivacional: frase };
     if (autor !== undefined) {
       updates.autorFrase = autor;
     }
     await updateDoc(userRef, updates);
+    
+    // ✅ Registrar auditoría de frase motivacional
+    await logAudit(
+      'UPDATE_PROFILE_PREFERENCES',
+      uid,
+      auth.currentUser?.displayName || 'Usuario',
+      `Frase motivacional actualizada`,
+      { 
+        previousFrase: previousState?.fraseMotivacional,
+        previousAutor: previousState?.autorFrase
+      },
+      { 
+        newFrase: frase,
+        newAutor: autor || previousState?.autorFrase
+      }
+    );
+    
     return { success: true };
   } catch (error) {
     console.error('Error al actualizar frase:', error);
@@ -567,6 +738,7 @@ export const reauthenticateUser = async (password: string): Promise<{ success: b
   }
 };
 
+// 🔥 MEJORADO: deleteCurrentAccount con auditoría
 export const deleteCurrentAccount = async (
   password: string
 ): Promise<{ success: boolean; error?: string }> => {
@@ -579,6 +751,16 @@ export const deleteCurrentAccount = async (
     
     const credential = EmailAuthProvider.credential(user.email, password);
     await reauthenticateWithCredential(user, credential);
+    
+    // ✅ Registrar antes de eliminar
+    await logAudit(
+      'DELETE_ACCOUNT',
+      user.uid,
+      user.displayName || 'Usuario',
+      `Cuenta eliminada permanentemente`,
+      { email: user.email, displayName: user.displayName },
+      null
+    );
     
     try {
       const avatarRef = ref(storage, `users/${user.uid}/avatar.jpg`);

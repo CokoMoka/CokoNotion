@@ -1,3 +1,4 @@
+// app/(tabs)/EditSet.tsx
 import * as FileSystem from 'expo-file-system/legacy';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
@@ -23,7 +24,9 @@ import {
   Flashcard,
   FlashcardSet,
   loadFlashcardSet,
-  saveFlashcardSet,
+  updateFlashcardSet,      // 🔥 NUEVO: para actualizar con auditoría
+  updateSetCover,          // 🔥 NUEVO: para actualizar portada
+  deleteSetCover,          // 🔥 NUEVO: para eliminar portada
 } from '../services/flashcardStorage';
 
 // Función para convertir imagen a Base64
@@ -46,7 +49,7 @@ const imageToBase64 = async (uri: string): Promise<string> => {
   }
 };
 
-export default function CreateSetScreen() {
+export default function EditSetScreen() {
   const { width } = useWindowDimensions();
   const scale = width / 390;
   const s = (value: number) => value * scale;
@@ -54,7 +57,7 @@ export default function CreateSetScreen() {
   const { setId } = useLocalSearchParams();
   const router = useRouter();
 
-  // Estados con la lógica completa
+  // Estados
   const [setName, setSetName] = useState("");
   const [cards, setCards] = useState<Flashcard[]>([]);
   const [frontText, setFrontText] = useState("");
@@ -62,7 +65,7 @@ export default function CreateSetScreen() {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(!!setId);
   const [saving, setSaving] = useState(false);
-  const [setTitle, setSetTitle] = useState("Editar Set");
+  const [existingSetId, setExistingSetId] = useState<string | null>(null);
   
   // Estado para la portada
   const [coverImage, setCoverImage] = useState<string | null>(null);
@@ -71,7 +74,7 @@ export default function CreateSetScreen() {
   const frontInputRef = useRef<TextInput>(null);
   const backInputRef = useRef<TextInput>(null);
 
-  // Cargar set existente si se está editando
+  // Cargar set existente
   useEffect(() => {
     if (setId && setId !== 'undefined') {
       cargarSet();
@@ -85,6 +88,7 @@ export default function CreateSetScreen() {
       if (set) {
         setSetName(set.name);
         setCards(set.cards);
+        setExistingSetId(set.id);
         if (set.coverBase64) {
           setCoverImage(set.coverBase64);
         }
@@ -166,21 +170,19 @@ export default function CreateSetScreen() {
     );
   };
 
-  // Función para manejar la portada (un solo botón con acciones diferentes)
+  // 🔥 Función para manejar la portada (con auditoría)
   const handleCoverAction = async () => {
     if (coverImage) {
-      // Si ya hay portada, preguntar si quiere cambiarla o eliminarla
       Alert.alert(
         'Portada actual',
         '¿Qué deseas hacer con la portada?',
         [
           { text: 'Cancelar', style: 'cancel' },
           { text: 'Cambiar imagen', onPress: selectNewCover },
-          { text: 'Eliminar portada', style: 'destructive', onPress: () => setCoverImage(null) }
+          { text: 'Eliminar portada', style: 'destructive', onPress: handleDeleteCover }
         ]
       );
     } else {
-      // Si no hay portada, seleccionar una nueva
       selectNewCover();
     }
   };
@@ -203,9 +205,24 @@ export default function CreateSetScreen() {
       if (!result.canceled && result.assets[0]) {
         setUploadingCover(true);
         const imageUri = result.assets[0].uri;
-        const base64Image = await imageToBase64(imageUri);
-        setCoverImage(base64Image);
-        Alert.alert('Portada seleccionada', 'La portada se guardará al guardar el set');
+        
+        if (existingSetId) {
+          // 🔥 Usar updateSetCover con auditoría
+          const success = await updateSetCover(existingSetId, imageUri);
+          if (success) {
+            const updatedSet = await loadFlashcardSet(existingSetId);
+            if (updatedSet?.coverBase64) {
+              setCoverImage(updatedSet.coverBase64);
+            }
+            Alert.alert('Éxito', 'Portada actualizada correctamente');
+          } else {
+            Alert.alert('Error', 'No se pudo actualizar la portada');
+          }
+        } else {
+          const base64Image = await imageToBase64(imageUri);
+          setCoverImage(base64Image);
+          Alert.alert('Portada seleccionada', 'La portada se guardará al guardar el set');
+        }
         setUploadingCover(false);
       }
     } catch (error) {
@@ -215,6 +232,27 @@ export default function CreateSetScreen() {
     }
   };
 
+  // 🔥 Función para eliminar portada con auditoría
+  const handleDeleteCover = async () => {
+    if (!existingSetId) {
+      setCoverImage(null);
+      Alert.alert('Portada eliminada', 'La portada se eliminará al guardar');
+      return;
+    }
+    
+    setUploadingCover(true);
+    const success = await deleteSetCover(existingSetId);
+    setUploadingCover(false);
+    
+    if (success) {
+      setCoverImage(null);
+      Alert.alert('Éxito', 'Portada eliminada');
+    } else {
+      Alert.alert('Error', 'No se pudo eliminar la portada');
+    }
+  };
+
+  // 🔥 saveSet CORREGIDO - Usa updateFlashcardSet
   const saveSet = async () => {
     if (!setName.trim()) {
       Alert.alert('Error', 'Ingresa un nombre para el set');
@@ -227,23 +265,21 @@ export default function CreateSetScreen() {
 
     setSaving(true);
 
-    const newSet: FlashcardSet = {
-      id: setId && setId !== 'undefined' ? String(setId) : Date.now().toString(),
+    // 🔥 EDITAR SET EXISTENTE
+    console.log('🔄 EDITANDO set existente:', existingSetId);
+    const success = await updateFlashcardSet(existingSetId!, {
       name: setName.trim(),
-      cards,
-      createdAt: new Date().toISOString(),
-      coverBase64: coverImage || undefined,
-    };
-
-    const success = await saveFlashcardSet(newSet);
+      cards: cards,
+    });
+    
     setSaving(false);
-
+    
     if (success) {
-      Alert.alert('Éxito', 'Set guardado correctamente', [
+      Alert.alert('Éxito', 'Set actualizado correctamente', [
         { text: 'OK', onPress: () => router.back() }
       ]);
     } else {
-      Alert.alert('Error', 'No se pudo guardar el set');
+      Alert.alert('Error', 'No se pudo actualizar el set');
     }
   };
 
@@ -314,7 +350,7 @@ export default function CreateSetScreen() {
                 {/* Título del Set */}
                 <View style={[styles.setTitleContainer, { marginTop: s(-40), marginBottom: s(20) }]}>
                   <Text style={[styles.setTitle]}>
-                    {setTitle}
+                    Editar Set
                   </Text>
                 </View>
 

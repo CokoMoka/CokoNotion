@@ -2,6 +2,7 @@
 import { getDatabase, ref, set, get, update } from 'firebase/database';
 import { imageToBase64, pickImage, takePhoto, getBase64Size } from './ImagenUtils';
 import { getCurrentUser } from './auth';
+import { logAudit } from './auditLogger';
 
 const database = getDatabase();
 
@@ -19,6 +20,9 @@ export const saveAvatarToRTDB = async (base64Image: string): Promise<boolean> =>
       avatarUpdatedAt: new Date().toISOString(),
       avatarSizeKB: sizeKB,
     });
+    
+    // 🔥 AUDITORÍA: Registrar cambio de avatar
+    await logAudit('UPDATE_AVATAR', user.uid, 'Avatar de perfil', 'Avatar actualizado');
     
     return true;
   } catch (error) {
@@ -58,6 +62,10 @@ export const deleteAvatar = async (): Promise<boolean> => {
     if (!user) return false;
     const userRef = ref(database, `users/${user.uid}`);
     await update(userRef, { avatarBase64: null, avatarUpdatedAt: null, avatarSizeKB: null });
+    
+    // 🔥 AUDITORÍA: Registrar eliminación de avatar
+    await logAudit('DELETE_AVATAR', user.uid, 'Avatar de perfil', 'Avatar eliminado');
+    
     return true;
   } catch (error) {
     console.error('Error al eliminar avatar:', error);
@@ -79,6 +87,9 @@ export const saveBannerToRTDB = async (base64Image: string): Promise<boolean> =>
       bannerUpdatedAt: new Date().toISOString(),
       bannerSizeKB: sizeKB,
     });
+    
+    // 🔥 AUDITORÍA: Registrar cambio de banner
+    await logAudit('UPDATE_BANNER', user.uid, 'Banner de portada', 'Banner actualizado');
     
     return true;
   } catch (error) {
@@ -111,6 +122,10 @@ export const deleteBanner = async (): Promise<boolean> => {
     if (!user) return false;
     const userRef = ref(database, `users/${user.uid}`);
     await update(userRef, { bannerBase64: null, bannerUpdatedAt: null, bannerSizeKB: null });
+    
+    // 🔥 AUDITORÍA: Registrar eliminación de banner
+    await logAudit('DELETE_BANNER', user.uid, 'Banner de portada', 'Banner eliminado');
+    
     return true;
   } catch (error) {
     console.error('Error al eliminar banner:', error);
@@ -132,6 +147,9 @@ export const saveCoverToRTDB = async (base64Image: string): Promise<boolean> => 
       coverUpdatedAt: new Date().toISOString(),
       coverSizeKB: sizeKB,
     });
+    
+    // 🔥 AUDITORÍA: Registrar cambio de cover
+    await logAudit('UPDATE_COVER', user.uid, 'Cover de Pomodoro', 'Cover actualizado');
     
     console.log(`✅ Cover guardado. Tamaño: ${sizeKB.toFixed(1)}KB`);
     return true;
@@ -165,6 +183,10 @@ export const deleteCover = async (): Promise<boolean> => {
     if (!user) return false;
     const userRef = ref(database, `users/${user.uid}`);
     await update(userRef, { coverBase64: null, coverUpdatedAt: null, coverSizeKB: null });
+    
+    // 🔥 AUDITORÍA: Registrar eliminación de cover
+    await logAudit('DELETE_COVER', user.uid, 'Cover de Pomodoro', 'Cover eliminado');
+    
     return true;
   } catch (error) {
     console.error('Error al eliminar cover:', error);
@@ -187,6 +209,9 @@ export const saveBackgroundToRTDB = async (base64Image: string): Promise<boolean
       backgroundSizeKB: sizeKB,
     });
     
+    // 🔥 AUDITORÍA: Registrar cambio de fondo
+    await logAudit('UPDATE_BACKGROUND', user.uid, 'Fondo de pantalla', 'Fondo actualizado');
+    
     console.log(`✅ Fondo guardado. Tamaño: ${sizeKB.toFixed(1)}KB`);
     return true;
   } catch (error) {
@@ -196,7 +221,7 @@ export const saveBackgroundToRTDB = async (base64Image: string): Promise<boolean
 };
 
 export const uploadBackgroundFromGallery = async (): Promise<boolean> => {
-  const imageUri = await pickImage('banner'); // Usa configuración de banner
+  const imageUri = await pickImage('banner');
   if (!imageUri) return false;
   const base64 = await imageToBase64(imageUri, 'banner');
   return await saveBackgroundToRTDB(base64);
@@ -219,6 +244,10 @@ export const deleteBackground = async (): Promise<boolean> => {
     if (!user) return false;
     const userRef = ref(database, `users/${user.uid}`);
     await update(userRef, { backgroundBase64: null, backgroundUpdatedAt: null, backgroundSizeKB: null });
+    
+    // 🔥 AUDITORÍA: Registrar eliminación de fondo
+    await logAudit('DELETE_BACKGROUND', user.uid, 'Fondo de pantalla', 'Fondo eliminado');
+    
     return true;
   } catch (error) {
     console.error('Error al eliminar fondo:', error);

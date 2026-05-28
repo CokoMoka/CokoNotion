@@ -139,6 +139,16 @@ export default function TabsLayout() {
           ),
         }}
       />
+      {/* AUDITORIA */}
+      <Tabs.Screen
+        name="Aud"
+        options={{
+          title: '',
+          tabBarIcon: ({ color, size, focused }) => (
+            <AnimatedIcon name="book" color={color} size={size} focused={focused} />
+          ),
+        }}
+      />
       {/* ========== PANTALLAS OCULTAS ========== */}
       <Tabs.Screen name="NuevaNota" options={{ href: null, tabBarIcon: () => null }} />
       <Tabs.Screen name="NotaEj" options={{ href: null, tabBarIcon: () => null }} />
